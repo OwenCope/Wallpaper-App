@@ -97,54 +97,48 @@ struct HomeView: View {
                 LinearGradient(colors: [.black.opacity(0.45), .clear, .clear, .black.opacity(0.75)],
                                startPoint: .top, endPoint: .bottom)
 
-                // Auto-rotate page dots (top-right).
-                VStack {
-                    HStack {
-                        Spacer()
-                        HStack(spacing: 6) {
-                            ForEach(0..<min(hero.count, 8), id: \.self) { i in
-                                Capsule().fill(.white.opacity(i == heroIndex % hero.count ? 0.95 : 0.4))
-                                    .frame(width: i == heroIndex % hero.count ? 20 : 6, height: 6)
-                            }
+                // FEATURED · title · metadata · actions (bottom-left) + page dots (bottom-right).
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("FEATURED")
+                            .font(.caption.weight(.bold)).tracking(3)
+                            .foregroundStyle(.white.opacity(0.85))
+                        Text(title)
+                            .font(.system(size: 42, weight: .bold))
+                            .foregroundStyle(.white)
+                        HStack(spacing: 14) {
+                            metaTag(photo.resolution)
+                            if let bytes = photo.file_size, bytes > 0 { metaTag(byteString(bytes)) }
                         }
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .glassEffect(.regular, in: .capsule)
+                        .foregroundStyle(.white.opacity(0.85))
+                        HStack(spacing: 12) {
+                            Button { preview.present(.remote(photo, service: service, library: library)) } label: {
+                                Label("View Wallpaper", systemImage: "arrow.up.forward")
+                                    .font(.callout.weight(.semibold))
+                                    .padding(.horizontal, 16).padding(.vertical, 10)
+                            }
+                            .buttonStyle(.glass)
+                            Button { Task { await setWallpaper(photo) } } label: {
+                                Image(systemName: "heart.fill").foregroundStyle(.pink)
+                                    .frame(width: 40, height: 40)
+                            }
+                            .buttonStyle(.plain)
+                            .glassEffect(.regular.interactive(), in: .circle)
+                        }
+                        .padding(.top, 6)
                     }
                     Spacer()
-                }
-                .padding(.top, 70).padding(.horizontal, 40)
-
-                // FEATURED · title · metadata · actions (bottom-left).
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("FEATURED")
-                        .font(.caption.weight(.bold)).tracking(3)
-                        .foregroundStyle(.white.opacity(0.85))
-                    Text(title)
-                        .font(.system(size: 42, weight: .bold))
-                        .foregroundStyle(.white)
-                    HStack(spacing: 14) {
-                        if !heroQuery.isEmpty { metaTag(heroQuery.capitalized) }
-                        metaTag(photo.resolution)
-                        if let bytes = photo.file_size, bytes > 0 { metaTag(byteString(bytes)) }
-                    }
-                    .foregroundStyle(.white.opacity(0.85))
-                    HStack(spacing: 12) {
-                        Button { preview.present(.remote(photo, service: service, library: library)) } label: {
-                            Label("View Wallpaper", systemImage: "arrow.up.forward")
-                                .font(.callout.weight(.semibold))
-                                .padding(.horizontal, 16).padding(.vertical, 10)
+                    // Page dots, bottom-right (clear of the toolbar).
+                    HStack(spacing: 6) {
+                        ForEach(0..<min(hero.count, 8), id: \.self) { i in
+                            Capsule().fill(.white.opacity(i == heroIndex % hero.count ? 0.95 : 0.4))
+                                .frame(width: i == heroIndex % hero.count ? 20 : 6, height: 6)
                         }
-                        .buttonStyle(.glass)
-                        Button { Task { await setWallpaper(photo) } } label: {
-                            Image(systemName: "heart.fill").foregroundStyle(.pink)
-                                .frame(width: 40, height: 40)
-                        }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive(), in: .circle)
                     }
-                    .padding(.top, 6)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .glassEffect(.regular, in: .capsule)
                 }
-                .padding(.leading, 40).padding(.bottom, 40)
+                .padding(.horizontal, 40).padding(.bottom, 40)
             }
             .frame(height: 480)
             .contentShape(.rect)
@@ -200,21 +194,10 @@ struct HomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 18) {
                     ForEach(categories) { cat in
-                        Button {
+                        CategoryTile(category: cat) {
                             exploreQuery = cat.query
                             tab = .explore
-                        } label: {
-                            LinearGradient(colors: cat.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-                                .frame(width: 260, height: 150)
-                                .overlay(alignment: .bottomLeading) {
-                                    Text(cat.name)
-                                        .font(.title3.weight(.bold))
-                                        .foregroundStyle(.white)
-                                        .padding(14)
-                                }
-                                .clipShape(.rect(cornerRadius: Theme.cornerRadius))
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -247,6 +230,30 @@ struct HomeView: View {
         fourK = (await fourKR)?.data ?? []
         hero = (await heroR)?.data ?? []
         loading = false
+    }
+}
+
+/// A category tile with a hover lift + brightening.
+private struct CategoryTile: View {
+    let category: HomeView.Category
+    let action: () -> Void
+    @State private var hovering = false
+    var body: some View {
+        Button(action: action) {
+            LinearGradient(colors: category.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                .frame(width: 260, height: 150)
+                .overlay(alignment: .bottomLeading) {
+                    Text(category.name).font(.title3.weight(.bold)).foregroundStyle(.white).padding(14)
+                }
+                .overlay { Color.white.opacity(hovering ? 0.12 : 0) }
+                .clipShape(.rect(cornerRadius: Theme.cornerRadius))
+                .overlay { RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(.white.opacity(hovering ? 0.5 : 0), lineWidth: 1.5) }
+                .shadow(color: .black.opacity(hovering ? 0.3 : 0.15), radius: hovering ? 14 : 7, y: hovering ? 8 : 4)
+                .scaleEffect(hovering ? 1.03 : 1)
+        }
+        .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.16), value: hovering)
+        .onHover { hovering = $0 }
     }
 }
 

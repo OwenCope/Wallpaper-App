@@ -49,10 +49,18 @@ struct ContentView: View {
 
     private var topBar: some View {
         HStack(spacing: 12) {
-            // Wordmark (top-left).
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.tint)
+            // Wordmark (top-left) — matches the app icon.
+            HStack(spacing: 8) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        LinearGradient(colors: [Color(red: 0.36, green: 0.32, blue: 0.95),
+                                                Color(red: 0.62, green: 0.28, blue: 0.95),
+                                                Color(red: 0.92, green: 0.36, blue: 0.66)],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing),
+                        in: .rect(cornerRadius: 7))
                 Text("Wallpaper").font(.headline.weight(.semibold))
             }
 
