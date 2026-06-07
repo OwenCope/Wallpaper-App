@@ -133,18 +133,41 @@ private struct LibraryHubView: View {
     @EnvironmentObject private var rotation: RotationManager
 
     var body: some View {
-        VStack(spacing: 14) {
-            Picker("", selection: $page) {
-                ForEach(Page.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 480)
-            .padding(.top, 70)
-
+        VStack(spacing: 16) {
+            header
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            GlassEffectContainer {
+                HStack(spacing: 4) {
+                    ForEach(Page.allCases) { p in
+                        Button { page = p } label: {
+                            Text(p.rawValue)
+                                .font(.callout.weight(.medium))
+                                .foregroundStyle(page == p ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                                .padding(.horizontal, 14).padding(.vertical, 7)
+                                .background { if page == p { Capsule().fill(.white.opacity(0.18)) } }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(4)
+                .glassEffect(.regular, in: .capsule)
+            }
+            Spacer()
+            if page == .photos && library.folderURL != nil {
+                Button { rotation.rotateNow() } label: { Label("Shuffle", systemImage: "shuffle") }
+                    .buttonStyle(.glass)
+                Button { library.chooseFolder() } label: { Label("Choose Folder", systemImage: "folder") }
+                    .buttonStyle(.glassProminent)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 70)
     }
 
     // Each page scrolls itself (Generate/Live already contain a ScrollView).
@@ -158,17 +181,7 @@ private struct LibraryHubView: View {
                 ContentUnavailableView("No images here", systemImage: "photo",
                     description: Text("This folder has no images. Pick another."))
             } else {
-                ScrollView {
-                    HStack {
-                        Spacer()
-                        Button { rotation.rotateNow() } label: { Label("Shuffle", systemImage: "shuffle") }
-                            .buttonStyle(.glass)
-                        Button { library.chooseFolder() } label: { Label("Choose Folder", systemImage: "folder") }
-                            .buttonStyle(.glassProminent)
-                    }
-                    .padding(.horizontal, 24)
-                    WallpaperGrid(urls: library.images)
-                }
+                ScrollView { WallpaperGrid(urls: library.images) }
             }
         case .favorites:
             if library.favoriteURLs.isEmpty {

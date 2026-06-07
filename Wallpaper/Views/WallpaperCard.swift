@@ -14,7 +14,7 @@ struct WallpaperCard<Img: View>: View {
     var caption: String? = nil
     var badge: String? = nil          // e.g. "NEW" / "PRO"
     var rank: Int? = nil              // big ranking number, bottom-left
-    var height: CGFloat = 190
+    var height: CGFloat = 165
     var isFavorite: Bool = false
     var isBusy: Bool = false
     var isCurrent: Bool = false
@@ -134,6 +134,6 @@ struct WallpaperCard<Img: View>: View {
 
 extension Array where Element == GridItem {
     static var wallpaperColumns: [GridItem] {
-        [GridItem(.adaptive(minimum: 300), spacing: 18)]
+        [GridItem(.adaptive(minimum: 250, maximum: 340), spacing: 16)]
     }
 }
