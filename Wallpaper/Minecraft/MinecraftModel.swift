@@ -469,55 +469,29 @@ enum MinecraftModel {
 
     // MARK: - Geometry helpers
 
-    /// Build a box with custom per-face UVs into the full texture, so every face
-    /// (front/back/sides/top/bottom) wraps exactly like Minecraft — no mirroring.
-    /// `faces` order: front(+Z), right(+X), back(-Z), left(-X), top(+Y), bottom(-Y).
     private static func box(_ w: CGFloat, _ h: CGFloat, _ d: CGFloat, faces: [Face], cg: CGImage, transparent: Bool = false) -> SCNNode {
-        let hw = Float(w / 2), hh = Float(h / 2), hd = Float(d / 2)
-        // Each face's 4 corners as seen from outside: top-left, top-right, bottom-right, bottom-left.
-        let quads: [[SCNVector3]] = [
-            [SCNVector3(-hw, hh, hd), SCNVector3(hw, hh, hd), SCNVector3(hw, -hh, hd), SCNVector3(-hw, -hh, hd)],      // front +Z
-            [SCNVector3(hw, hh, hd), SCNVector3(hw, hh, -hd), SCNVector3(hw, -hh, -hd), SCNVector3(hw, -hh, hd)],      // right +X
-            [SCNVector3(hw, hh, -hd), SCNVector3(-hw, hh, -hd), SCNVector3(-hw, -hh, -hd), SCNVector3(hw, -hh, -hd)],  // back -Z
-            [SCNVector3(-hw, hh, -hd), SCNVector3(-hw, hh, hd), SCNVector3(-hw, -hh, hd), SCNVector3(-hw, -hh, -hd)],  // left -X
-            [SCNVector3(-hw, hh, -hd), SCNVector3(hw, hh, -hd), SCNVector3(hw, hh, hd), SCNVector3(-hw, hh, hd)],      // top +Y
-            [SCNVector3(-hw, -hh, hd), SCNVector3(hw, -hh, hd), SCNVector3(hw, -hh, -hd), SCNVector3(-hw, -hh, -hd)],  // bottom -Y
-        ]
-        let faceNormals = [SCNVector3(0, 0, 1), SCNVector3(1, 0, 0), SCNVector3(0, 0, -1),
-                           SCNVector3(-1, 0, 0), SCNVector3(0, 1, 0), SCNVector3(0, -1, 0)]
-
-        var verts: [SCNVector3] = [], norms: [SCNVector3] = [], uvs: [CGPoint] = [], idx: [Int32] = []
-        let scale = CGFloat(cg.width) / 64.0
-        let tw = CGFloat(cg.width), th = CGFloat(cg.height)
-        for (fi, face) in faces.enumerated() where fi < quads.count {
-            let pxX = CGFloat(face.x) * scale, pxY = CGFloat(face.y) * scale
-            let pxW = CGFloat(face.w) * scale, pxH = CGFloat(face.h) * scale
-            let u0 = pxX / tw, u1 = (pxX + pxW) / tw
-            let vTop = 1 - pxY / th, vBot = 1 - (pxY + pxH) / th
-            let base = Int32(verts.count)
-            verts += quads[fi]
-            norms += Array(repeating: faceNormals[fi], count: 4)
-            uvs += [CGPoint(x: u0, y: vTop), CGPoint(x: u1, y: vTop),
-                    CGPoint(x: u1, y: vBot), CGPoint(x: u0, y: vBot)]   // TL,TR,BR,BL
-            idx += [base, base + 3, base + 2, base, base + 2, base + 1]
-        }
-        let geo = SCNGeometry(sources: [
-            SCNGeometrySource(vertices: verts),
-            SCNGeometrySource(normals: norms),
-            SCNGeometrySource(textureCoordinates: uvs),
-        ], elements: [SCNGeometryElement(indices: idx, primitiveType: .triangles)])
-        geo.firstMaterial = makeMaterial(cg: cg, transparent: transparent)
+        let geo = SCNBox(width: w, height: h, length: d, chamferRadius: 0)
+        geo.materials = faces.map { material(crop: $0, cg: cg, transparent: transparent) }
         return SCNNode(geometry: geo)
     }
 
-    private static func makeMaterial(cg: CGImage, transparent: Bool) -> SCNMaterial {
+    private static func material(crop: Face, cg: CGImage, transparent: Bool = false) -> SCNMaterial {
         let m = SCNMaterial()
-        m.diffuse.contents = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+        // Skin coordinates assume a 64-wide texture; scale to the real pixel size.
+        let scale = CGFloat(cg.width) / 64.0
+        let rect = CGRect(x: CGFloat(crop.x) * scale, y: CGFloat(crop.y) * scale,
+                          width: CGFloat(crop.w) * scale, height: CGFloat(crop.h) * scale)
+        if let sub = cg.cropping(to: rect) {
+            m.diffuse.contents = NSImage(cgImage: sub, size: NSSize(width: crop.w, height: crop.h))
+        } else {
+            m.diffuse.contents = transparent ? NSColor.clear : NSColor.systemGray
+        }
         m.diffuse.magnificationFilter = .nearest
         m.diffuse.minificationFilter = .nearest
-        m.lightingModel = .constant
+        m.lightingModel = .constant   // flat, full-brightness pixels
         m.isDoubleSided = true
         if transparent {
+            // Second skin layer: cut out where the texture is transparent.
             m.transparencyMode = .aOne
             m.blendMode = .alpha
             m.writesToDepthBuffer = false
