@@ -9,7 +9,7 @@ struct WallpaperGrid: View {
     @EnvironmentObject private var preview: PreviewCoordinator
 
     var body: some View {
-        LazyVGrid(columns: .wallpaperColumns, spacing: 18) {
+        LazyVGrid(columns: .wallpaperColumns, spacing: 16) {
             ForEach(urls, id: \.self) { url in
                 WallpaperCard(
                     image: { AsyncImageFile(url: url) },

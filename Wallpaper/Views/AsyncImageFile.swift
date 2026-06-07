@@ -22,7 +22,7 @@ struct AsyncImageFile: View {
 
     private func load() async {
         let thumb = await Task.detached(priority: .userInitiated) {
-            Self.downsample(url, maxPixel: 600)
+            Self.downsample(url, maxPixel: 1200)   // crisp on large/Retina cards
         }.value
         if !Task.isCancelled { image = thumb }
     }

@@ -42,13 +42,13 @@ struct HomeView: View {
     }
     private let categories: [Category] = [
         .init(name: "Nature", query: "nature landscape", colors: [.green, .teal]),
-        .init(name: "Anime", query: "anime", colors: [.pink, .purple]),
-        .init(name: "Minimal", query: "minimal", colors: [.gray, .black]),
+        .init(name: "Animals", query: "animals wildlife", colors: [.orange, .brown]),
+        .init(name: "Tech", query: "technology computer setup", colors: [.blue, .indigo]),
         .init(name: "Space", query: "space galaxy", colors: [.indigo, .black]),
-        .init(name: "Cars", query: "cars", colors: [.red, .orange]),
-        .init(name: "City", query: "city night", colors: [.blue, .indigo]),
-        .init(name: "Minecraft", query: "minecraft", colors: [.green, .brown]),
-        .init(name: "Gaming", query: "video games", colors: [.purple, .blue]),
+        .init(name: "Minimal", query: "minimal", colors: [.gray, .black]),
+        .init(name: "Mountains", query: "mountains", colors: [.teal, .gray]),
+        .init(name: "Ocean", query: "ocean beach", colors: [.cyan, .blue]),
+        .init(name: "Forest", query: "forest", colors: [.green, .black]),
     ]
 
     var body: some View {
@@ -56,13 +56,14 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 0) {
                 heroBanner   // full-bleed, toolbar floats over it
                 VStack(alignment: .leading, spacing: 64) {
-                    carousel(title: "Most recent community wallpapers", subtitle: nil,
+                    carousel(title: "Nature",
+                             subtitle: "Landscapes, forests & mountains",
                              photos: latest, ranked: false)
-                    carousel(title: "Most Popular Wallpapers",
-                             subtitle: "Trending wallpapers loved by the community",
-                             photos: popular, ranked: true)
-                    carousel(title: "4K Ultra HD",
-                             subtitle: "Crisp wallpapers for high-resolution displays",
+                    carousel(title: "Pets & Animals",
+                             subtitle: "Cats, dogs & wildlife",
+                             photos: popular, ranked: false)
+                    carousel(title: "Tech & Setups",
+                             subtitle: "Gadgets, desks & gear",
                              photos: fourK, ranked: false)
                     categoriesSection
                 }
@@ -219,12 +220,11 @@ struct HomeView: View {
 
     private func load() async {
         loading = true
-        async let latestR = try? service.search(query: "", page: 1, sorting: "date_added")
-        async let popularR = try? service.search(query: "", page: 1, sorting: "toplist")
-        async let fourKR = try? service.search(query: "", page: 1, atleast: "3840x2160", sorting: "toplist")
-        heroQuery = SearchHistory.recent.first ?? ""
-        async let heroR = try? service.search(query: heroQuery, page: 1,
-                                              sorting: heroQuery.isEmpty ? "toplist" : "relevance")
+        async let latestR = try? service.search(query: "nature landscape", page: 1, sorting: "toplist")
+        async let popularR = try? service.search(query: "animals pets wildlife", page: 1, sorting: "toplist")
+        async let fourKR = try? service.search(query: "technology computer setup", page: 1, sorting: "toplist")
+        heroQuery = SearchHistory.recent.first ?? "nature"
+        async let heroR = try? service.search(query: heroQuery, page: 1, sorting: "relevance")
         latest = (await latestR)?.data ?? []
         popular = (await popularR)?.data ?? []
         fourK = (await fourKR)?.data ?? []

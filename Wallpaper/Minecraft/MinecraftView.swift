@@ -134,7 +134,7 @@ final class SceneController: ObservableObject {
     func rebuild(skins: [NSImage], item: HeldItem, biome: Biome,
                  armorLayer1: CGImage?, armorLayer2: CGImage?, swordTexture: CGImage?,
                  helmetTrim: CGImage?, chestTrim: CGImage?, leggingsTrim: CGImage?, bootsTrim: CGImage?,
-                 enchanted: Bool) {
+                 enchanted: Bool, armorTint: NSColor?) {
         // 1 player → free camera orbit (old feel); multiple → per-character drag.
         scnView.allowsCameraControl = skins.count <= 1
         let rotations = (0..<skins.count).map { scnView.yaws[$0] ?? 0 }
@@ -143,7 +143,7 @@ final class SceneController: ObservableObject {
                                              swordTexture: swordTexture,
                                              helmetTrim: helmetTrim, chestTrim: chestTrim,
                                              leggingsTrim: leggingsTrim, bootsTrim: bootsTrim,
-                                             enchanted: enchanted, rotations: rotations)
+                                             enchanted: enchanted, armorTint: armorTint, rotations: rotations)
         // Point the view at our scene camera (avoids a stale/detached camera → black screen).
         scnView.pointOfView = scnView.scene?.rootNode.childNode(withName: "camera", recursively: false)
         // Preserve zoom across rebuilds.
@@ -199,7 +199,9 @@ struct MinecraftView: View {
     @State private var armor: Armor = .none
     @State private var trims: [ArmorPiece: PieceTrim] = [
         .helmet: .init(), .chest: .init(), .leggings: .init(), .boots: .init()]
-    @State private var selectedPiece: ArmorPiece = .helmet
+    @State private var matchAll = true
+    @State private var allTrim = PieceTrim()
+    @State private var trimSwatches: [String: NSImage] = [:]
     @State private var enchanted = false
     @State private var biome: Biome = .plains
 
@@ -209,8 +211,7 @@ struct MinecraftView: View {
     @State private var background: NSImage?
     @State private var backgrounds: [WallhavenPhoto] = []
     @State private var selectedBgID: String?
-    @State private var blackBg = false
-    @State private var trimPreview: NSImage?
+    @State private var blackBg = true
     @State private var thumbCache: [String: NSImage] = [:]
     @State private var characterScale: Double = 0.85
 
@@ -232,9 +233,10 @@ struct MinecraftView: View {
         .onChange(of: pose) { _, _ in if mode == .render { Task { await load() } } }
         .onChange(of: renderView) { _, _ in if mode == .render { Task { await load() } } }
         .onChange(of: item) { _, _ in rebuild3D() }
-        .onChange(of: armor) { _, _ in rebuild3D() }
-        .onChange(of: trims) { _, _ in rebuild3D(); Task { await updateTrimPreview() } }
-        .onChange(of: selectedPiece) { _, _ in Task { await updateTrimPreview() } }
+        .onChange(of: armor) { _, _ in rebuild3D(); trimSwatches.removeAll(); Task { await updateSwatches() } }
+        .onChange(of: trims) { _, _ in rebuild3D(); Task { await updateSwatches() } }
+        .onChange(of: matchAll) { _, _ in rebuild3D(); Task { await updateSwatches() } }
+        .onChange(of: allTrim) { _, _ in rebuild3D(); Task { await updateSwatches() } }
         .onChange(of: enchanted) { _, _ in rebuild3D() }
         .onChange(of: biome) { _, _ in Task { await loadBackgrounds() } }
         .onChange(of: blackBg) { _, on in
@@ -299,9 +301,23 @@ struct MinecraftView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Label("Character", systemImage: "person.crop.square").font(.title3.weight(.semibold))
 
-                Picker("", selection: $mode) {
-                    ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
-                }.labelsHidden().pickerStyle(.segmented)
+                GlassEffectContainer {
+                    HStack(spacing: 4) {
+                        ForEach(Mode.allCases) { m in
+                            Button { mode = m } label: {
+                                Text(m.rawValue)
+                                    .font(.callout.weight(.medium))
+                                    .foregroundStyle(mode == m ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 7)
+                                    .background { if mode == m { Capsule().fill(.white.opacity(0.18)) } }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(4)
+                    .glassEffect(.regular, in: .capsule)
+                }
 
                 field(mode == .threeD ? "Add players" : "Username") {
                     HStack(spacing: 8) {
@@ -352,29 +368,27 @@ struct MinecraftView: View {
                                     Slider(value: $characterScale, in: 0.2...0.95)
                                 }
                             } else {
-                                field("Held item") { menu($item, HeldItem.allCases) { $0.rawValue } }
+                                Toggle("Hold sword", isOn: Binding(
+                                    get: { item == .sword },
+                                    set: { item = $0 ? .sword : .none }))
+                                    .font(.caption).toggleStyle(.switch).controlSize(.mini)
                                 field("Armor") { menu($armor, Armor.allCases) { $0.rawValue } }
                                 if armor != .none {
-                                    field("Trim piece") {
-                                        Picker("", selection: $selectedPiece) {
-                                            ForEach(ArmorPiece.allCases) { Text($0.rawValue).tag($0) }
-                                        }.labelsHidden().pickerStyle(.menu)
-                                    }
-                                    field("Trim pattern (\(selectedPiece.rawValue))") {
-                                        menu(patternBinding(selectedPiece), TrimPattern.allCases) { $0.label }
-                                    }
-                                    if trims[selectedPiece]?.pattern != .none {
-                                        field("Trim material") {
-                                            menu(materialBinding(selectedPiece), TrimMaterial.allCases) { $0.label }
-                                        }
-                                        if let trimPreview {
-                                            Image(nsImage: trimPreview).resizable().interpolation(.none)
-                                                .aspectRatio(contentMode: .fit).frame(height: 46)
-                                                .background(Color.black.opacity(0.3))
-                                                .clipShape(.rect(cornerRadius: 6))
+                                    Toggle("Match all pieces", isOn: $matchAll).font(.caption).toggleStyle(.switch).controlSize(.mini)
+                                    if matchAll {
+                                        trimRow(title: "Armor Trim",
+                                                pattern: Binding(get: { allTrim.pattern }, set: { allTrim.pattern = $0 }),
+                                                material: Binding(get: { allTrim.material }, set: { allTrim.material = $0 }),
+                                                swatch: allTrim)
+                                    } else {
+                                        ForEach(ArmorPiece.allCases) { piece in
+                                            trimRow(title: piece.rawValue,
+                                                    pattern: patternBinding(piece),
+                                                    material: materialBinding(piece),
+                                                    swatch: trims[piece] ?? .init())
                                         }
                                     }
-                                    Toggle("Enchanted glint", isOn: $enchanted).font(.caption)
+                                    Toggle("Enchanted glint", isOn: $enchanted).font(.caption).toggleStyle(.switch).controlSize(.mini)
                                 }
                             }
                             field("Background") { backgroundPicker }
@@ -399,7 +413,7 @@ struct MinecraftView: View {
 
     private var backgroundPicker: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Toggle("Solid black", isOn: $blackBg).font(.caption)
+            Toggle("Solid black", isOn: $blackBg).font(.caption).toggleStyle(.switch).controlSize(.mini)
             if !blackBg {
             HStack {
                 menu($biome, Biome.allCases) { $0.rawValue }
@@ -449,6 +463,42 @@ struct MinecraftView: View {
         }.labelsHidden().pickerStyle(.menu)
     }
 
+    private func swatchKey(_ t: PieceTrim) -> String { "\(armor.rawValue)|\(t.pattern.rawValue)|\(t.material.rawValue)" }
+
+    /// A trim picker row: pattern + material menus and a live recolored preview swatch.
+    @ViewBuilder
+    private func trimRow(title: String, pattern: Binding<TrimPattern>,
+                         material: Binding<TrimMaterial>, swatch: PieceTrim) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                menu(pattern, TrimPattern.allCases) { $0.label }
+                if swatch.pattern != .none { menu(material, TrimMaterial.allCases) { $0.label } }
+            }
+            if swatch.pattern != .none, let img = trimSwatches[swatchKey(swatch)] {
+                Image(nsImage: img).resizable().interpolation(.none)
+                    .aspectRatio(contentMode: .fit).frame(height: 64).frame(maxWidth: .infinity)
+                    .background(LinearGradient(colors: [.gray.opacity(0.3), .black.opacity(0.4)],
+                                               startPoint: .top, endPoint: .bottom))
+                    .clipShape(.rect(cornerRadius: 8))
+            }
+        }
+    }
+
+    /// Pre-render swatches showing each active trim composited onto the real armor.
+    private func updateSwatches() async {
+        guard armor != .none else { return }
+        let (a1, _) = await TextureService.shared.armor(armor)
+        let tint: NSColor? = armor == .leather ? NSColor(red: 0.65, green: 0.40, blue: 0.25, alpha: 1) : nil
+        let active = matchAll ? [allTrim] : ArmorPiece.allCases.map { trims[$0] ?? .init() }
+        for t in active where t.pattern != .none && trimSwatches[swatchKey(t)] == nil {
+            let (body, _) = await TextureService.shared.trim(t.pattern, t.material)
+            if let img = ArmorTrimSwatch.make(armor: a1, trim: body, tint: tint) {
+                trimSwatches[swatchKey(t)] = img
+            }
+        }
+    }
+
     // MARK: Actions
 
     private func load() async {
@@ -483,13 +533,7 @@ struct MinecraftView: View {
         Task { await build3D() }
     }
 
-    /// Live swatch of the selected piece's recolored trim.
-    private func updateTrimPreview() async {
-        let t = trims[selectedPiece] ?? .init()
-        guard t.pattern != .none else { trimPreview = nil; return }
-        let (body, _) = await TextureService.shared.trim(t.pattern, t.material)
-        trimPreview = body.map { NSImage(cgImage: $0, size: NSSize(width: 64, height: 32)) }
-    }
+    private func pieceTrim(_ p: ArmorPiece) -> PieceTrim { matchAll ? allTrim : (trims[p] ?? .init()) }
 
     private func build3D() async {
         guard !players.isEmpty else { return }
@@ -499,7 +543,7 @@ struct MinecraftView: View {
         // Resolve each piece's trim (body texture for helmet/chest/boots, legs for leggings).
         var helmetT: CGImage?, chestT: CGImage?, leggingsT: CGImage?, bootsT: CGImage?
         if armor != .none {
-            let h = trims[.helmet]!, c = trims[.chest]!, lg = trims[.leggings]!, b = trims[.boots]!
+            let h = pieceTrim(.helmet), c = pieceTrim(.chest), lg = pieceTrim(.leggings), b = pieceTrim(.boots)
             helmetT = (await TextureService.shared.trim(h.pattern, h.material)).0
             chestT = (await TextureService.shared.trim(c.pattern, c.material)).0
             leggingsT = (await TextureService.shared.trim(lg.pattern, lg.material)).1
@@ -509,7 +553,8 @@ struct MinecraftView: View {
         controller.rebuild(skins: players.map(\.skin), item: item, biome: biome,
                            armorLayer1: l1, armorLayer2: l2, swordTexture: sword,
                            helmetTrim: helmetT, chestTrim: chestT, leggingsTrim: leggingsT, bootsTrim: bootsT,
-                           enchanted: enchanted)
+                           enchanted: enchanted,
+                           armorTint: armor == .leather ? NSColor(red: 0.65, green: 0.40, blue: 0.25, alpha: 1) : nil)
         if blackBg { controller.setBackgroundBlack() }
         else if let bg = background { controller.setBackground(bg) }
     }

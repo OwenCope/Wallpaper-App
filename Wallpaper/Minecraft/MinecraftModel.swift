@@ -2,7 +2,7 @@ import SceneKit
 import AppKit
 
 enum HeldItem: String, CaseIterable, Identifiable {
-    case none = "None", sword = "Sword", torch = "Torch", apple = "Apple", block = "Block"
+    case none = "None", sword = "Sword"
     var id: String { rawValue }
 }
 
@@ -96,6 +96,33 @@ enum TrimRecolor {
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return [] }
         ctx.draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
         return (0..<w).map { (data[$0 * 4], data[$0 * 4 + 1], data[$0 * 4 + 2]) }
+    }
+}
+
+/// Builds a small preview image of a trim composited onto the armor (chestplate front).
+enum ArmorTrimSwatch {
+    static func make(armor: CGImage?, trim: CGImage?, tint: NSColor? = nil) -> NSImage? {
+        guard let armor else { return nil }
+        let w = armor.width, h = armor.height
+        var data = [UInt8](repeating: 0, count: w * h * 4)
+        let cs = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(data: &data, width: w, height: h, bitsPerComponent: 8,
+                                  bytesPerRow: w * 4, space: cs,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        let full = CGRect(x: 0, y: 0, width: w, height: h)
+        ctx.draw(armor, in: full)
+        if let tint {   // dye greyscale leather
+            ctx.setBlendMode(.multiply); ctx.setFillColor(tint.cgColor); ctx.fill(full)
+            ctx.setBlendMode(.normal)
+        }
+        if let trim { ctx.draw(trim, in: full) }
+        guard let composed = ctx.makeImage() else { return nil }
+        // Crop the chestplate front face (x16–28, y20–32 on a 64-wide texture)
+        // — the body front plus a sliver of shoulder so it reads as a chestplate.
+        let s = CGFloat(w) / 64
+        let rect = CGRect(x: 20 * s, y: 20 * s, width: 8 * s, height: 12 * s)
+        guard let crop = composed.cropping(to: rect) else { return nil }
+        return NSImage(cgImage: crop, size: NSSize(width: 8, height: 12))
     }
 }
 
@@ -197,7 +224,8 @@ enum MinecraftModel {
                       swordTexture: CGImage? = nil,
                       helmetTrim: CGImage? = nil, chestTrim: CGImage? = nil,
                       leggingsTrim: CGImage? = nil, bootsTrim: CGImage? = nil,
-                      enchanted: Bool = false, rotations: [Double] = []) -> SCNScene {
+                      enchanted: Bool = false, armorTint: NSColor? = nil,
+                      rotations: [Double] = []) -> SCNScene {
         let scene = SCNScene()
         scene.background.contents = backgroundImage(for: biome)
 
@@ -337,34 +365,34 @@ enum MinecraftModel {
         // leggings armor(0.6,o2) < leggings trim(0.82,o3) < layer1 armor(1.0-1.1,o4) < trims(1.1+,o5)
         // layer_2: leggings (innermost).
         if let a2 = armorLayer2 {
-            addArmor(container, 4, 12, 4, inflate: 0.6, at: rightLeg.position, faces: legFaces, cg: a2, glow: enchanted, order: 2)
-            addArmor(container, 4, 12, 4, inflate: 0.6, at: leftLeg.position, faces: legFaces, cg: a2, glow: enchanted, order: 2)
+            addArmor(container, 4, 12, 4, inflate: 0.6, at: rightLeg.position, faces: legFaces, cg: a2, glow: enchanted, order: 2, tint: armorTint)
+            addArmor(container, 4, 12, 4, inflate: 0.6, at: leftLeg.position, faces: legFaces, cg: a2, glow: enchanted, order: 2, tint: armorTint)
         }
         if let t = leggingsTrim {
-            addArmor(container, 4, 12, 4, inflate: 0.82, at: rightLeg.position, faces: legFaces, cg: t, glow: false, order: 3)
-            addArmor(container, 4, 12, 4, inflate: 0.82, at: leftLeg.position, faces: legFaces, cg: t, glow: false, order: 3)
+            addArmor(container, 4, 12, 4, inflate: 0.66, at: rightLeg.position, faces: legFaces, cg: t, glow: false, order: 3)
+            addArmor(container, 4, 12, 4, inflate: 0.66, at: leftLeg.position, faces: legFaces, cg: t, glow: false, order: 3)
         }
         // layer_1: helmet, chestplate, sleeves, boots.
         if let a1 = armorLayer1 {
-            addArmor(container, 8, 8, 8, inflate: 1.1, at: head.position, faces: headFaces, cg: a1, glow: enchanted, order: 4)
-            addArmor(container, 8, 12, 4, inflate: 1.0, at: body.position, faces: bodyFaces, cg: a1, glow: enchanted, order: 4)
-            addArmor(container, 4, 12, 4, inflate: 1.0, at: rightArm.position, faces: armFaces, cg: a1, glow: enchanted, order: 4)
-            addArmor(container, 4, 12, 4, inflate: 1.0, at: leftArm.position, faces: armFaces, cg: a1, glow: enchanted, order: 4)
-            addArmor(container, 4, 12, 4, inflate: 1.1, at: rightLeg.position, faces: legFaces, cg: a1, glow: enchanted, order: 4)
-            addArmor(container, 4, 12, 4, inflate: 1.1, at: leftLeg.position, faces: legFaces, cg: a1, glow: enchanted, order: 4)
+            addArmor(container, 8, 8, 8, inflate: 1.1, at: head.position, faces: headFaces, cg: a1, glow: enchanted, order: 4, tint: armorTint)
+            addArmor(container, 8, 12, 4, inflate: 1.0, at: body.position, faces: bodyFaces, cg: a1, glow: enchanted, order: 4, tint: armorTint)
+            addArmor(container, 4, 12, 4, inflate: 1.0, at: rightArm.position, faces: armFaces, cg: a1, glow: enchanted, order: 4, tint: armorTint)
+            addArmor(container, 4, 12, 4, inflate: 1.0, at: leftArm.position, faces: armFaces, cg: a1, glow: enchanted, order: 4, tint: armorTint)
+            addArmor(container, 4, 12, 4, inflate: 1.1, at: rightLeg.position, faces: legFaces, cg: a1, glow: enchanted, order: 4, tint: armorTint)
+            addArmor(container, 4, 12, 4, inflate: 1.1, at: leftLeg.position, faces: legFaces, cg: a1, glow: enchanted, order: 4, tint: armorTint)
         }
         // Per-piece trims (outermost).
         if let t = helmetTrim {
-            addArmor(container, 8, 8, 8, inflate: 1.22, at: head.position, faces: headFaces, cg: t, glow: false, order: 5)
+            addArmor(container, 8, 8, 8, inflate: 1.16, at: head.position, faces: headFaces, cg: t, glow: false, order: 5)
         }
         if let t = chestTrim {
-            addArmor(container, 8, 12, 4, inflate: 1.12, at: body.position, faces: bodyFaces, cg: t, glow: false, order: 5)
-            addArmor(container, 4, 12, 4, inflate: 1.12, at: rightArm.position, faces: armFaces, cg: t, glow: false, order: 5)
-            addArmor(container, 4, 12, 4, inflate: 1.12, at: leftArm.position, faces: armFaces, cg: t, glow: false, order: 5)
+            addArmor(container, 8, 12, 4, inflate: 1.06, at: body.position, faces: bodyFaces, cg: t, glow: false, order: 5)
+            addArmor(container, 4, 12, 4, inflate: 1.06, at: rightArm.position, faces: armFaces, cg: t, glow: false, order: 5)
+            addArmor(container, 4, 12, 4, inflate: 1.06, at: leftArm.position, faces: armFaces, cg: t, glow: false, order: 5)
         }
         if let t = bootsTrim {
-            addArmor(container, 4, 12, 4, inflate: 1.22, at: rightLeg.position, faces: legFaces, cg: t, glow: false, order: 5)
-            addArmor(container, 4, 12, 4, inflate: 1.22, at: leftLeg.position, faces: legFaces, cg: t, glow: false, order: 5)
+            addArmor(container, 4, 12, 4, inflate: 1.16, at: rightLeg.position, faces: legFaces, cg: t, glow: false, order: 5)
+            addArmor(container, 4, 12, 4, inflate: 1.16, at: leftLeg.position, faces: legFaces, cg: t, glow: false, order: 5)
         }
 
         // Held item attaches to the right hand (child of the arm, so it moves with it).
@@ -375,9 +403,6 @@ enum MinecraftModel {
             node.position = SCNVector3(0, -0.5, 6)
             node.eulerAngles = SCNVector3(0, -Float.pi / 2, 0)
             rightArm.addChildNode(node)
-        } else if let itemNode = itemNode(item) {
-            itemNode.position = SCNVector3(0, -7, 2)   // at the fist, slightly forward
-            rightArm.addChildNode(itemNode)
         }
 
         // Position characters side by side, centered around the origin.
@@ -425,10 +450,13 @@ enum MinecraftModel {
     /// Add an inflated, textured armor layer over a base part.
     private static func addArmor(_ parent: SCNNode, _ w: CGFloat, _ h: CGFloat, _ d: CGFloat,
                                  inflate: CGFloat, at position: SCNVector3, faces: [Face], cg: CGImage,
-                                 glow: Bool = true, order: Int = 2) {
+                                 glow: Bool = true, order: Int = 2, tint: NSColor? = nil) {
         let node = box(w + inflate, h + inflate, d + inflate, faces: faces, cg: cg, transparent: true)
         node.position = position
         node.renderingOrder = order
+        if let tint {   // greyscale leather is dyed by multiplying with its colour
+            node.geometry?.materials.forEach { $0.multiply.contents = tint }
+        }
         if glow {
             // Faint purple enchant sheen (masked by the texture's alpha).
             node.geometry?.materials.forEach { mat in
@@ -516,40 +544,6 @@ enum MinecraftModel {
     }
 
     // MARK: - Held items (stylized primitives)
-
-    private static func itemNode(_ item: HeldItem) -> SCNNode? {
-        switch item {
-        case .none: return nil
-        case .sword:
-            let node = SCNNode()
-            let blade = SCNNode(geometry: SCNBox(width: 1, height: 11, length: 1, chamferRadius: 0))
-            blade.geometry?.firstMaterial?.diffuse.contents = NSColor(white: 0.85, alpha: 1)
-            blade.position = SCNVector3(0, 3, 0)
-            let handle = SCNNode(geometry: SCNBox(width: 1, height: 3, length: 1, chamferRadius: 0))
-            handle.geometry?.firstMaterial?.diffuse.contents = NSColor.brown
-            handle.position = SCNVector3(0, -3, 0)
-            node.addChildNode(blade); node.addChildNode(handle)
-            return node
-        case .torch:
-            let node = SCNNode()
-            let stick = SCNNode(geometry: SCNBox(width: 1, height: 7, length: 1, chamferRadius: 0))
-            stick.geometry?.firstMaterial?.diffuse.contents = NSColor.brown
-            let flame = SCNNode(geometry: SCNBox(width: 1.4, height: 1.4, length: 1.4, chamferRadius: 0))
-            flame.geometry?.firstMaterial?.diffuse.contents = NSColor.orange
-            flame.geometry?.firstMaterial?.emission.contents = NSColor.orange
-            flame.position = SCNVector3(0, 4, 0)
-            node.addChildNode(stick); node.addChildNode(flame)
-            return node
-        case .apple:
-            let apple = SCNNode(geometry: SCNSphere(radius: 2.2))
-            apple.geometry?.firstMaterial?.diffuse.contents = NSColor.systemRed
-            return apple
-        case .block:
-            let block = SCNNode(geometry: SCNBox(width: 5, height: 5, length: 5, chamferRadius: 0))
-            block.geometry?.firstMaterial?.diffuse.contents = NSColor.systemGreen
-            return block
-        }
-    }
 
     // MARK: - Biome backdrop
 
