@@ -6,6 +6,8 @@ import ImageIO
 struct PreviewItem: Identifiable {
     let id = UUID()
     let title: String
+    /// Optional async upgrade to a nicer title (e.g. fetched Wallhaven tags).
+    var titleProvider: (() async -> String?)? = nil
     let resolution: String?
     let fileSizeBytes: Int?
     let shareURL: URL?
@@ -31,10 +33,12 @@ struct WallpaperDetailView: View {
     @State private var favorite: Bool
     @State private var showApplyPopover = false
     @State private var applying = false
+    @State private var displayTitle: String
 
     init(item: PreviewItem) {
         self.item = item
         _favorite = State(initialValue: item.isFavorite)
+        _displayTitle = State(initialValue: item.title)
     }
 
     var body: some View {
@@ -69,6 +73,11 @@ struct WallpaperDetailView: View {
             .padding(.bottom, 24)
         }
         .transition(.opacity.combined(with: .scale(scale: 1.02)))
+        .task {
+            if let provider = item.titleProvider, let nicer = await provider() {
+                withAnimation(.easeOut(duration: 0.2)) { displayTitle = nicer }
+            }
+        }
     }
 
     private var bottomBar: some View {
@@ -79,7 +88,7 @@ struct WallpaperDetailView: View {
             .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title).font(.headline).lineLimit(1)
+                Text(displayTitle).font(.headline).lineLimit(1)
                 HStack(spacing: 12) {
                     if let resolution = item.resolution {
                         Label(resolution, systemImage: "aspectratio").labelStyle(.titleAndIcon)
@@ -114,25 +123,37 @@ struct WallpaperDetailView: View {
             }
 
             Button { showApplyPopover = true } label: {
-                if applying { ProgressView().controlSize(.small) }
-                else { Text("Set Wallpaper").font(.callout.weight(.semibold)) }
-            }
-            .buttonStyle(.glassProminent)
-            .popover(isPresented: $showApplyPopover, arrowEdge: .top) {
-                ApplyOptionsView(applying: $applying) { screen in
-                    showApplyPopover = false
-                    applying = true
-                    Task {
-                        await item.apply(screen)
-                        applying = false
-                        coordinator.dismiss()
-                    }
+                Group {
+                    if applying { ProgressView().controlSize(.small) }
+                    else { Label("Set Wallpaper", systemImage: "checkmark").font(.callout.weight(.semibold)) }
                 }
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .contentShape(.capsule)
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .capsule)
+            .popover(isPresented: $showApplyPopover, arrowEdge: .top) {
+                // Popovers are separate windows — they don't inherit the main
+                // window's dark scheme, so re-assert it here.
+                applyPopover
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 12)
         .glassEffect(.regular, in: .capsule)
         .frame(maxWidth: 640)
+    }
+
+    private var applyPopover: some View {
+        ApplyOptionsView(applying: $applying) { screen in
+            showApplyPopover = false
+            applying = true
+            Task {
+                await item.apply(screen)
+                applying = false
+                coordinator.dismiss()
+            }
+        }
+        .preferredColorScheme(.dark)
     }
 
     private func formatBytes(_ bytes: Int) -> String {
@@ -156,11 +177,8 @@ private struct ApplyOptionsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Picker("", selection: $scope) {
-                ForEach(Scope.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            GlassSegmentBar(items: Scope.allCases, label: \.rawValue,
+                            selection: $scope, itemWidth: 80)
 
             if scope != .desktop {
                 Text("macOS only allows apps to change the desktop, so this will set the desktop wallpaper.")
@@ -170,7 +188,18 @@ private struct ApplyOptionsView: View {
             HStack {
                 Text("Choose display").font(.subheadline.weight(.semibold))
                 Spacer()
-                Toggle("All", isOn: $allDisplays).toggleStyle(.button).controlSize(.small)
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { allDisplays.toggle() }
+                } label: {
+                    Text("All")
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(allDisplays ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                        .padding(.horizontal, 12).padding(.vertical, 5)
+                        .background { if allDisplays { Capsule().fill(.white.opacity(0.18)) } }
+                        .contentShape(.capsule)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .capsule)
             }
 
             if !allDisplays {
@@ -197,9 +226,14 @@ private struct ApplyOptionsView: View {
                 let screen: NSScreen? = allDisplays ? nil : screens[safe: selected]
                 onApply(screen)
             } label: {
-                Text("Set Wallpaper").frame(maxWidth: .infinity)
+                Label("Set Wallpaper", systemImage: "checkmark")
+                    .font(.callout.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .contentShape(.capsule)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .capsule)
         }
         .padding(16)
         .frame(width: 280)
@@ -242,7 +276,8 @@ extension PreviewItem {
     @MainActor
     static func remote(_ photo: WallhavenPhoto, service: WallhavenService, library: LibraryStore) -> PreviewItem {
         PreviewItem(
-            title: "Wallpaper \(photo.id)",
+            title: "Wallhaven #\(photo.id)",
+            titleProvider: { await service.title(for: photo) },
             resolution: photo.resolution,
             fileSizeBytes: photo.file_size,
             shareURL: URL(string: photo.url),

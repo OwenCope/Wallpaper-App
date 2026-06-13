@@ -9,6 +9,7 @@ enum AppTab: String, CaseIterable, Identifiable {
 }
 
 struct ContentView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var collections: CollectionStore
     @EnvironmentObject private var preview: PreviewCoordinator
     @State private var tab: AppTab = .home
@@ -19,14 +20,17 @@ struct ContentView: View {
         ZStack(alignment: .top) {
             Theme.background.ignoresSafeArea()
 
-            // Content scrolls underneath the floating toolbar.
-            Group {
-                switch tab {
-                case .home:    HomeView(tab: $tab, exploreQuery: $exploreQuery)
-                case .explore: ExploreView(query: $exploreQuery)
-                case .library: LibraryHubView()
-                case .minecraft: MinecraftView()
-                }
+            // Keep all tabs alive and toggle visibility — recreating them on
+            // every switch reloads their content and makes the UI flash.
+            ZStack {
+                HomeView(tab: $tab, exploreQuery: $exploreQuery)
+                    .opacity(tab == .home ? 1 : 0).allowsHitTesting(tab == .home)
+                ExploreView(query: $exploreQuery)
+                    .opacity(tab == .explore ? 1 : 0).allowsHitTesting(tab == .explore)
+                LibraryHubView()
+                    .opacity(tab == .library ? 1 : 0).allowsHitTesting(tab == .library)
+                MinecraftView()
+                    .opacity(tab == .minecraft ? 1 : 0).allowsHitTesting(tab == .minecraft)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -41,83 +45,168 @@ struct ContentView: View {
         .animation(.easeOut(duration: 0.2), value: preview.item?.id)
         .sheet(isPresented: $showSettings) {
             SettingsView()
-                .preferredColorScheme(.dark)
         }
+        .background(WindowDragConfigurator())
     }
 
-    // MARK: - Floating top bar
+    // MARK: - Floating top bar (iPadOS-style glass tab bar)
 
     private var topBar: some View {
         HStack(spacing: 12) {
-            // Wordmark (top-left) — matches the app icon.
-            HStack(spacing: 8) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        LinearGradient(colors: [Color(red: 0.36, green: 0.32, blue: 0.95),
-                                                Color(red: 0.62, green: 0.28, blue: 0.95),
-                                                Color(red: 0.92, green: 0.36, blue: 0.66)],
-                                       startPoint: .topLeading, endPoint: .bottomTrailing),
-                        in: .rect(cornerRadius: 7))
-                Text("Wallpaper").font(.headline.weight(.semibold))
-            }
+            wordmark
 
             Spacer()
 
-            // Centered segmented control + search.
             GlassEffectContainer(spacing: 8) {
                 HStack(spacing: 8) {
-                    segmentedTabs
-                    circleButton("magnifyingglass") { tab = .explore }
+                    GlassSegmentBar(items: AppTab.allCases, label: \.rawValue,
+                                    selection: $tab, commandShortcuts: true)
+                    circleButton("magnifyingglass", help: "Search wallpapers") { tab = .explore }
                 }
             }
 
             Spacer()
 
-            // Right-side actions.
             GlassEffectContainer(spacing: 8) {
                 HStack(spacing: 8) {
-                    circleButton("plus") { tab = .library }
-                    circleButton("gearshape") { showSettings = true }
+                    circleButton("plus", help: "Add to library") { tab = .library }
+                    circleButton("gearshape", help: "Settings (⌘,)") { showSettings = true }
                 }
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
-    }
-
-    private var segmentedTabs: some View {
-        HStack(spacing: 4) {
-            ForEach(AppTab.allCases) { t in
-                Button { tab = t } label: {
-                    Text(t.rawValue)
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(tab == t ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                        .padding(.horizontal, 16).padding(.vertical, 7)
-                        .background {
-                            if tab == t {
-                                Capsule().fill(.white.opacity(0.18))
-                            }
-                        }
-                }
-                .buttonStyle(.plain)
-            }
+        .background {
+            // Standard macOS Settings shortcut for the in-window settings sheet.
+            Button("") { showSettings = true }
+                .keyboardShortcut(",", modifiers: .command)
+                .hidden()
         }
-        .padding(4)
-        .glassEffect(.regular, in: .capsule)
     }
 
-    private func circleButton(_ icon: String, action: @escaping () -> Void) -> some View {
+    private var wordmark: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "mountain.2.fill")
+                .font(.system(size: 13, weight: .semibold))
+                // Dark mode: white logo on black. Light mode: black logo on white.
+                .foregroundStyle(colorScheme == .dark ? .white : .black)
+                .frame(width: 28, height: 28)
+                .background(colorScheme == .dark ? .black : .white, in: .rect(cornerRadius: 7))
+                .overlay(RoundedRectangle(cornerRadius: 7)
+                    .strokeBorder(colorScheme == .dark ? .white.opacity(0.10) : .black.opacity(0.12)))
+            Text("Wallpaper").font(.headline.weight(.semibold))
+        }
+        .fixedSize()
+    }
+
+    private func circleButton(_ icon: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .semibold))
                 .frame(width: 34, height: 34)
+                .contentShape(.circle)
         }
         .buttonStyle(.plain)
         .glassEffect(.regular.interactive(), in: .circle)
+        .help(help)
     }
+}
+
+/// iPadOS-26-style glass segment bar: the selection capsule can be dragged
+/// along the bar and follows the pointer with a spring, snapping to the
+/// nearest item on release. Clicking an item still works, with the capsule
+/// sliding over. Reused for the main tabs, Library pages, and pickers.
+struct GlassSegmentBar<T: Hashable>: View {
+    let items: [T]
+    let label: (T) -> String
+    @Binding var selection: T
+    var itemWidth: CGFloat = 100
+    var commandShortcuts = false   // ⌘1…⌘n
+
+    /// Continuous highlight position (in item units) while dragging; nil when idle.
+    @State private var dragPosition: Double?
+    @State private var pressed = false
+
+    private let itemHeight: CGFloat = 32
+    private var selectedIndex: Int { items.firstIndex(of: selection) ?? 0 }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            // Selection highlight — follows the pointer while dragging.
+            Capsule()
+                .fill(.white.opacity(pressed ? 0.26 : 0.18))
+                .frame(width: itemWidth, height: itemHeight)
+                .scaleEffect(pressed ? 1.06 : 1.0)
+                .offset(x: highlightOffset)
+                .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.72), value: highlightOffset)
+                .animation(.snappy(duration: 0.2), value: pressed)
+
+            HStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.element) { index, item in
+                    button(for: item, at: index)
+                }
+            }
+        }
+        .padding(4)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .highPriorityGesture(dragGesture)
+    }
+
+    @ViewBuilder
+    private func button(for item: T, at index: Int) -> some View {
+        let base = Button {
+            selection = item
+        } label: {
+            Text(label(item))
+                .font(.callout.weight(.medium))
+                .foregroundStyle(selection == item ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                .frame(width: itemWidth, height: itemHeight)
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+
+        if commandShortcuts, index < 9 {
+            base
+                .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                .help("\(label(item)) (⌘\(index + 1))")
+        } else {
+            base.help(label(item))
+        }
+    }
+
+    private var highlightOffset: CGFloat {
+        CGFloat(dragPosition ?? Double(selectedIndex)) * itemWidth
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 3)
+            .onChanged { value in
+                pressed = true
+                // Center the capsule under the pointer, clamped to the bar.
+                let raw = (value.location.x - 4) / itemWidth - 0.5
+                dragPosition = min(max(raw, 0), Double(items.count - 1))
+            }
+            .onEnded { value in
+                pressed = false
+                let raw = (value.location.x - 4) / itemWidth - 0.5
+                let snapped = Int((min(max(raw, 0), Double(items.count - 1))).rounded())
+                selection = items[snapped]
+                dragPosition = nil
+            }
+    }
+}
+
+/// Lets the window be moved by dragging anywhere on its background
+/// (toolbar included), like Finder/Music side areas.
+private struct WindowDragConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView()
+        DispatchQueue.main.async {
+            v.window?.isMovableByWindowBackground = true
+        }
+        return v
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 // MARK: - Library hub (Photos / Favorites / Collections / Generate / Live)
@@ -142,22 +231,8 @@ private struct LibraryHubView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            GlassEffectContainer {
-                HStack(spacing: 4) {
-                    ForEach(Page.allCases) { p in
-                        Button { page = p } label: {
-                            Text(p.rawValue)
-                                .font(.callout.weight(.medium))
-                                .foregroundStyle(page == p ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                                .padding(.horizontal, 14).padding(.vertical, 7)
-                                .background { if page == p { Capsule().fill(.white.opacity(0.18)) } }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(4)
-                .glassEffect(.regular, in: .capsule)
-            }
+            GlassSegmentBar(items: Page.allCases, label: \.rawValue,
+                            selection: $page, itemWidth: 104)
             Spacer()
             if page == .photos && library.folderURL != nil {
                 Button { rotation.rotateNow() } label: { Label("Shuffle", systemImage: "shuffle") }

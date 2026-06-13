@@ -2,8 +2,16 @@ import SwiftUI
 
 /// App color tokens to match the Wallspace dark aesthetic.
 enum Theme {
-    static let background = Color(red: 0.11, green: 0.11, blue: 0.12)   // ~#1c1c1e
-    static let card = Color(red: 0.16, green: 0.16, blue: 0.17)
+    /// Adaptive so the app follows the system appearance: near-black in dark, near-white in light.
+    static let background = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? .black : NSColor(white: 0.96, alpha: 1)
+    })
+    static let card = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(red: 0.16, green: 0.16, blue: 0.17, alpha: 1)
+            : NSColor(white: 0.91, alpha: 1)
+    })
     static let cornerRadius: CGFloat = 14
 }
 
@@ -85,11 +93,14 @@ struct WallpaperCard<Img: View>: View {
     private var hoverControls: some View {
         if hovering {
             Button(action: onSet) {
-                Label("Set Wallpaper", systemImage: "checkmark.circle.fill")
+                Label("Set Wallpaper", systemImage: "checkmark")
                     .font(.callout.weight(.semibold))
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 14).padding(.vertical, 8)
+                    .contentShape(.capsule)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .capsule)
             .padding(.bottom, 14)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }

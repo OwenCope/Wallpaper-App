@@ -24,6 +24,8 @@ struct WallpaperApp: App {
     @StateObject private var collections = CollectionStore()
     @StateObject private var live = LiveWallpaperController.shared
     @StateObject private var preview = PreviewCoordinator()
+    @StateObject private var minecraft = MinecraftStore()
+    @AppStorage("followSystemAppearance") private var followSystemAppearance = true
 
     var body: some Scene {
         // Main browsing window.
@@ -34,13 +36,24 @@ struct WallpaperApp: App {
                 .environmentObject(collections)
                 .environmentObject(live)
                 .environmentObject(preview)
+                .environmentObject(minecraft)
                 .frame(minWidth: 960, minHeight: 680)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(followSystemAppearance ? nil : .dark)
                 .onAppear { rotation.attach(library: library) }
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1280, height: 860)
+
+        // Pop-out Trim Studio — design every armor piece's trim in a roomy window.
+        Window("Trim Studio", id: "minecraft") {
+            MinecraftTrimsView()
+                .environmentObject(minecraft)
+                .frame(minWidth: 760, minHeight: 560)
+                .preferredColorScheme(.dark)
+        }
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 1040, height: 880)
 
         // Menu bar control center — quick access without opening the window.
         MenuBarExtra("Wallpaper", systemImage: "photo.on.rectangle.angled") {

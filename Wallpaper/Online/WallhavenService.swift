@@ -65,6 +65,25 @@ struct WallhavenService {
         }
     }
 
+    /// Fetch a photo's tags (the detail endpoint includes them; search does not)
+    /// and build a human-friendly title from the top tags, e.g. "Autumn · Mount Fuji".
+    func title(for photo: WallhavenPhoto) async -> String? {
+        struct Detail: Decodable {
+            let data: Inner
+            struct Inner: Decodable { let tags: [Tag]? }
+            struct Tag: Decodable { let name: String }
+        }
+        var comps = URLComponents(string: "https://wallhaven.cc/api/v1/w/\(photo.id)")!
+        if let apiKey, !apiKey.isEmpty { comps.queryItems = [.init(name: "apikey", value: apiKey)] }
+        guard let url = comps.url,
+              let (data, response) = try? await URLSession.shared.data(from: url),
+              let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+              let detail = try? JSONDecoder().decode(Detail.self, from: data),
+              let tags = detail.data.tags, !tags.isEmpty else { return nil }
+        let names = tags.prefix(2).map(\.name.localizedCapitalized)
+        return names.joined(separator: " · ")
+    }
+
     /// Download the full-resolution file into the app's cache and return the local URL.
     func download(_ photo: WallhavenPhoto) async throws -> URL {
         guard let remote = URL(string: photo.path) else { throw WallhavenError.badURL }
