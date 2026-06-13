@@ -3,9 +3,15 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var rotation: RotationManager
     @AppStorage("wallhaven.apiKey") private var apiKey = ""
+    @AppStorage("followSystemAppearance") private var followSystemAppearance = true
 
     var body: some View {
         Form {
+            Section("Appearance") {
+                Toggle("Follow system appearance", isOn: $followSystemAppearance)
+                Text("When off, the app always uses the dark theme.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Rotation") {
                 Picker("Interval", selection: $rotation.interval) {
                     ForEach(RotationManager.Interval.allCases) { interval in

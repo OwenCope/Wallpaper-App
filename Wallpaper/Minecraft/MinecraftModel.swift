@@ -6,6 +6,21 @@ enum HeldItem: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Everything one character wears/holds — resolved textures, ready to render.
+/// Each player in the scene carries its own, so loadouts can differ per character.
+struct PlayerEquip {
+    var armorLayer1: CGImage?      // helmet/chest/sleeves/boots
+    var armorLayer2: CGImage?      // leggings
+    var swordTexture: CGImage?
+    var helmetTrim: CGImage?
+    var chestTrim: CGImage?
+    var leggingsTrim: CGImage?
+    var bootsTrim: CGImage?
+    var enchanted: Bool = false
+    var armorTint: NSColor?
+    var item: HeldItem = .none
+}
+
 enum Armor: String, CaseIterable, Identifiable {
     case none = "None", leather = "Leather", chainmail = "Chainmail"
     case iron = "Iron", gold = "Gold", diamond = "Diamond", netherite = "Netherite"
@@ -47,6 +62,19 @@ enum Armor: String, CaseIterable, Identifiable {
         case .netherite: "netherite"
         }
     }
+
+    /// Item-texture prefix for the armor piece icons (note: gold → "golden").
+    var itemPrefix: String? {
+        switch self {
+        case .none: nil
+        case .leather: "leather"
+        case .chainmail: "chainmail"
+        case .iron: "iron"
+        case .gold: "golden"
+        case .diamond: "diamond"
+        case .netherite: "netherite"
+        }
+    }
 }
 
 enum TrimPattern: String, CaseIterable, Identifiable {
@@ -60,6 +88,35 @@ enum TrimMaterial: String, CaseIterable, Identifiable {
     case quartz, iron, gold, lapis, emerald, diamond, netherite, redstone, copper, amethyst, resin
     var id: String { rawValue }
     var label: String { rawValue.capitalized }
+
+    /// The official item texture that represents this trim material.
+    var itemName: String {
+        switch self {
+        case .quartz: "quartz"
+        case .iron: "iron_ingot"
+        case .gold: "gold_ingot"
+        case .lapis: "lapis_lazuli"
+        case .emerald: "emerald"
+        case .diamond: "diamond"
+        case .netherite: "netherite_ingot"
+        case .redstone: "redstone"
+        case .copper: "copper_ingot"
+        case .amethyst: "amethyst_shard"
+        case .resin: "resin_brick"
+        }
+    }
+}
+
+/// Redraws a (possibly palette-indexed) image into true 32-bit RGBA so SceneKit/Metal
+/// can sample its real colours instead of falling back to a grey index ramp.
+func rgbaFlattened(_ cg: CGImage) -> CGImage {
+    let w = cg.width, h = cg.height
+    guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
+                              bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return cg }
+    ctx.interpolationQuality = .none
+    ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+    return ctx.makeImage() ?? cg
 }
 
 /// Recolors a greyscale trim texture using Minecraft's palette-key → material-palette mapping.
@@ -126,6 +183,85 @@ enum ArmorTrimSwatch {
     }
 }
 
+/// Composes a front-facing "paper doll" of the full armored character for live previews:
+/// base skin + armor layers + per-piece trims, with optional leather dye.
+enum ArmorPreview {
+    /// A source region in 64-wide-texture units (top-left origin) — the front face of a part.
+    private struct F { let x, y, w, h: Int }
+    private static let head = F(x: 8, y: 8, w: 8, h: 8)
+    private static let body = F(x: 20, y: 20, w: 8, h: 12)
+    private static let arm  = F(x: 44, y: 20, w: 4, h: 12)
+    private static let leg  = F(x: 4, y: 20, w: 4, h: 12)
+
+    static func paperDoll(skin: CGImage,
+                          layer1: CGImage?, layer2: CGImage?,
+                          helmetTrim: CGImage?, chestTrim: CGImage?,
+                          leggingsTrim: CGImage?, bootsTrim: CGImage?,
+                          tint: NSColor?) -> NSImage? {
+        let up = 12                       // screen px per Minecraft pixel
+        let W = 16 * up, H = 32 * up      // figure is 16 wide × 32 tall in MC px
+        var data = [UInt8](repeating: 0, count: W * H * 4)
+        let cs = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(data: &data, width: W, height: H, bitsPerComponent: 8,
+                                  bytesPerRow: W * 4, space: cs,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.interpolationQuality = .none
+
+        func blit(_ cg: CGImage?, _ s: F, _ dx: Int, _ dy: Int, _ dw: Int, _ dh: Int, dye: NSColor? = nil) {
+            guard let cg else { return }
+            let scale = CGFloat(cg.width) / 64
+            let r = CGRect(x: CGFloat(s.x) * scale, y: CGFloat(s.y) * scale,
+                           width: CGFloat(s.w) * scale, height: CGFloat(s.h) * scale)
+            guard var sub = cg.cropping(to: r) else { return }
+            if let dye { sub = tinted(sub, dye) }
+            let dest = CGRect(x: CGFloat(dx * up), y: CGFloat(H - (dy + dh) * up),
+                              width: CGFloat(dw * up), height: CGFloat(dh * up))
+            ctx.draw(sub, in: dest)
+        }
+
+        // Base skin (front faces). Both arms/legs reuse the right-side region for the preview.
+        blit(skin, head, 4, 0, 8, 8)
+        blit(skin, arm, 0, 8, 4, 12); blit(skin, body, 4, 8, 8, 12); blit(skin, arm, 12, 8, 4, 12)
+        blit(skin, leg, 4, 20, 4, 12); blit(skin, leg, 8, 20, 4, 12)
+
+        // Leggings (layer 2) + its trim, on the legs.
+        blit(layer2, leg, 4, 20, 4, 12, dye: tint); blit(layer2, leg, 8, 20, 4, 12, dye: tint)
+        blit(leggingsTrim, leg, 4, 20, 4, 12); blit(leggingsTrim, leg, 8, 20, 4, 12)
+
+        // Layer 1 (helmet/chest/sleeves/boots).
+        blit(layer1, head, 4, 0, 8, 8, dye: tint)
+        blit(layer1, body, 4, 8, 8, 12, dye: tint)
+        blit(layer1, arm, 0, 8, 4, 12, dye: tint); blit(layer1, arm, 12, 8, 4, 12, dye: tint)
+        blit(layer1, leg, 4, 20, 4, 12, dye: tint); blit(layer1, leg, 8, 20, 4, 12, dye: tint)
+
+        // Per-piece trims (outermost).
+        blit(helmetTrim, head, 4, 0, 8, 8)
+        blit(chestTrim, body, 4, 8, 8, 12)
+        blit(chestTrim, arm, 0, 8, 4, 12); blit(chestTrim, arm, 12, 8, 4, 12)
+        blit(bootsTrim, leg, 4, 20, 4, 12); blit(bootsTrim, leg, 8, 20, 4, 12)
+
+        guard let out = ctx.makeImage() else { return nil }
+        return NSImage(cgImage: out, size: NSSize(width: 16, height: 32))
+    }
+
+    /// Multiply a greyscale texture by a dye colour (e.g. leather), preserving alpha.
+    private static func tinted(_ cg: CGImage, _ color: NSColor) -> CGImage {
+        let w = cg.width, h = cg.height
+        var d = [UInt8](repeating: 0, count: w * h * 4)
+        let cs = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(data: &d, width: w, height: h, bitsPerComponent: 8,
+                                  bytesPerRow: w * 4, space: cs,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return cg }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        let c = color.usingColorSpace(.deviceRGB) ?? color
+        let tr = c.redComponent, tg = c.greenComponent, tb = c.blueComponent
+        for i in stride(from: 0, to: d.count, by: 4) where d[i + 3] > 0 {
+            d[i] = UInt8(Double(d[i]) * tr); d[i + 1] = UInt8(Double(d[i + 1]) * tg); d[i + 2] = UInt8(Double(d[i + 2]) * tb)
+        }
+        return ctx.makeImage() ?? cg
+    }
+}
+
 /// Fetches real Minecraft textures (armor equipment + item icons), cached.
 /// An actor so the cache is never mutated from two concurrent tasks at once.
 actor TextureService {
@@ -136,12 +272,29 @@ actor TextureService {
     /// (layer_1 = helmet/chest/boots, layer_2 = leggings)
     func armor(_ armor: Armor) async -> (CGImage?, CGImage?) {
         guard let f = armor.file else { return (nil, nil) }
-        let l1 = await tex("entity/equipment/humanoid/\(f)")
-        let l2 = await tex("entity/equipment/humanoid_leggings/\(f)")
+        // Equipment textures are palette-indexed PNGs; SceneKit can't sample indexed
+        // colour (it reads the index as grey), so flatten to true RGBA first.
+        let l1 = await tex("entity/equipment/humanoid/\(f)").map(rgbaFlattened)
+        let l2 = await tex("entity/equipment/humanoid_leggings/\(f)").map(rgbaFlattened)
         return (l1, l2)
     }
 
     func sword(_ armor: Armor) async -> CGImage? { await tex("item/\(armor.swordTier)_sword") }
+
+    /// Official smithing-template item icon for a trim pattern.
+    func trimTemplate(_ pattern: TrimPattern) async -> CGImage? {
+        guard pattern != .none else { return nil }
+        return await tex("item/\(pattern.rawValue)_armor_trim_smithing_template")
+    }
+
+    /// Official item icon (ingot/gem) for a trim material.
+    func materialItem(_ material: TrimMaterial) async -> CGImage? { await tex("item/\(material.itemName)") }
+
+    /// Official armor-piece item icon (e.g. netherite_helmet).
+    func armorItem(_ armor: Armor, _ suffix: String) async -> CGImage? {
+        guard let prefix = armor.itemPrefix else { return nil }
+        return await tex("item/\(prefix)_\(suffix)")
+    }
 
     /// Recolored trim overlays (body, leggings) for a pattern + material.
     func trim(_ pattern: TrimPattern, _ material: TrimMaterial) async -> (CGImage?, CGImage?) {
@@ -219,12 +372,7 @@ enum MinecraftModel {
     /// A box face crop, in skin-pixel coordinates (top-left origin).
     private struct Face { let x, y, w, h: Int }
 
-    static func scene(skins: [NSImage], item: HeldItem, biome: Biome,
-                      armorLayer1: CGImage? = nil, armorLayer2: CGImage? = nil,
-                      swordTexture: CGImage? = nil,
-                      helmetTrim: CGImage? = nil, chestTrim: CGImage? = nil,
-                      leggingsTrim: CGImage? = nil, bootsTrim: CGImage? = nil,
-                      enchanted: Bool = false, armorTint: NSColor? = nil,
+    static func scene(skins: [NSImage], equips: [PlayerEquip], biome: Biome,
                       rotations: [Double] = []) -> SCNScene {
         let scene = SCNScene()
         scene.background.contents = backgroundImage(for: biome)
@@ -236,6 +384,7 @@ enum MinecraftModel {
 
         let container = SCNNode()
         container.name = "player\(index)"
+        let e = index < equips.count ? equips[index] : PlayerEquip()
 
         // Order for SCNBox materials: front(+Z), right(+X), back(-Z), left(-X), top(+Y), bottom(-Y).
         // Head
@@ -364,41 +513,46 @@ enum MinecraftModel {
         // Layers stack inside-out by inflate; renderingOrder must match (no depth writes).
         // leggings armor(0.6,o2) < leggings trim(0.82,o3) < layer1 armor(1.0-1.1,o4) < trims(1.1+,o5)
         // layer_2: leggings (innermost).
-        if let a2 = armorLayer2 {
-            addArmor(container, 4, 12, 4, inflate: 0.6, at: rightLeg.position, faces: legFaces, cg: a2, glow: enchanted, order: 2, tint: armorTint)
-            addArmor(container, 4, 12, 4, inflate: 0.6, at: leftLeg.position, faces: legFaces, cg: a2, glow: enchanted, order: 2, tint: armorTint)
+        if let a2 = e.armorLayer2 {
+            // Belt on the torso (sits under the chestplate, fills the waist gap), plus both legs.
+            addArmor(container, 8, 12, 4, inflate: 0.5, at: body.position, faces: bodyFaces, cg: a2, glow: e.enchanted, order: 2, tint: e.armorTint)
+            addArmor(container, 4, 12, 4, inflate: 0.45, inflateW: 0.1, at: rightLeg.position, faces: legFaces, cg: a2, glow: e.enchanted, order: 2, tint: e.armorTint, mirror: true)
+            addArmor(container, 4, 12, 4, inflate: 0.45, inflateW: 0.1, at: leftLeg.position, faces: legFaces, cg: a2, glow: e.enchanted, order: 2, tint: e.armorTint)
         }
-        if let t = leggingsTrim {
-            addArmor(container, 4, 12, 4, inflate: 0.66, at: rightLeg.position, faces: legFaces, cg: t, glow: false, order: 3)
-            addArmor(container, 4, 12, 4, inflate: 0.66, at: leftLeg.position, faces: legFaces, cg: t, glow: false, order: 3)
+        if let t = e.leggingsTrim {
+            addArmor(container, 8, 12, 4, inflate: 0.52, at: body.position, faces: bodyFaces, cg: t, glow: false, order: 3)
+            addArmor(container, 4, 12, 4, inflate: 0.51, inflateW: 0.1, at: rightLeg.position, faces: legFaces, cg: t, glow: false, order: 3, mirror: true)
+            addArmor(container, 4, 12, 4, inflate: 0.51, inflateW: 0.1, at: leftLeg.position, faces: legFaces, cg: t, glow: false, order: 3)
         }
-        // layer_1: helmet, chestplate, sleeves, boots.
-        if let a1 = armorLayer1 {
-            addArmor(container, 8, 8, 8, inflate: 1.1, at: head.position, faces: headFaces, cg: a1, glow: enchanted, order: 4, tint: armorTint)
-            addArmor(container, 8, 12, 4, inflate: 1.0, at: body.position, faces: bodyFaces, cg: a1, glow: enchanted, order: 4, tint: armorTint)
-            addArmor(container, 4, 12, 4, inflate: 1.0, at: rightArm.position, faces: armFaces, cg: a1, glow: enchanted, order: 4, tint: armorTint)
-            addArmor(container, 4, 12, 4, inflate: 1.0, at: leftArm.position, faces: armFaces, cg: a1, glow: enchanted, order: 4, tint: armorTint)
-            addArmor(container, 4, 12, 4, inflate: 1.1, at: rightLeg.position, faces: legFaces, cg: a1, glow: enchanted, order: 4, tint: armorTint)
-            addArmor(container, 4, 12, 4, inflate: 1.1, at: leftLeg.position, faces: legFaces, cg: a1, glow: enchanted, order: 4, tint: armorTint)
+        // layer_1: helmet, chestplate, sleeves, boots. Tight inset so it hugs the body.
+        // Arms/legs use a small inflateW so neighbours stay separated instead of fusing.
+        // The right arm/leg are mirrored so their trim wraps the same way as the left.
+        if let a1 = e.armorLayer1 {
+            addArmor(container, 8, 8, 8, inflate: 0.85, at: head.position, faces: headFaces, cg: a1, glow: e.enchanted, order: 4, tint: e.armorTint)
+            addArmor(container, 8, 12, 4, inflate: 0.55, inflateW: 0.12, at: body.position, faces: bodyFaces, cg: a1, glow: e.enchanted, order: 4, tint: e.armorTint)
+            addArmor(container, 4, 12, 4, inflate: 0.5, inflateW: 0.1, at: rightArm.position, faces: armFaces, cg: a1, glow: e.enchanted, order: 4, tint: e.armorTint)
+            addArmor(container, 4, 12, 4, inflate: 0.5, inflateW: 0.1, at: leftArm.position, faces: armFaces, cg: a1, glow: e.enchanted, order: 4, tint: e.armorTint, mirror: true)
+            addArmor(container, 4, 12, 4, inflate: 0.55, inflateW: 0.1, at: rightLeg.position, faces: legFaces, cg: a1, glow: e.enchanted, order: 4, tint: e.armorTint, mirror: true)
+            addArmor(container, 4, 12, 4, inflate: 0.55, inflateW: 0.1, at: leftLeg.position, faces: legFaces, cg: a1, glow: e.enchanted, order: 4, tint: e.armorTint)
         }
-        // Per-piece trims (outermost).
-        if let t = helmetTrim {
-            addArmor(container, 8, 8, 8, inflate: 1.16, at: head.position, faces: headFaces, cg: t, glow: false, order: 5)
+        // Per-piece trims (outermost) — just a hair larger than their armor layer.
+        if let t = e.helmetTrim {
+            addArmor(container, 8, 8, 8, inflate: 0.91, at: head.position, faces: headFaces, cg: t, glow: false, order: 5)
         }
-        if let t = chestTrim {
-            addArmor(container, 8, 12, 4, inflate: 1.06, at: body.position, faces: bodyFaces, cg: t, glow: false, order: 5)
-            addArmor(container, 4, 12, 4, inflate: 1.06, at: rightArm.position, faces: armFaces, cg: t, glow: false, order: 5)
-            addArmor(container, 4, 12, 4, inflate: 1.06, at: leftArm.position, faces: armFaces, cg: t, glow: false, order: 5)
+        if let t = e.chestTrim {
+            addArmor(container, 8, 12, 4, inflate: 0.61, inflateW: 0.18, at: body.position, faces: bodyFaces, cg: t, glow: false, order: 5)
+            addArmor(container, 4, 12, 4, inflate: 0.56, inflateW: 0.16, at: rightArm.position, faces: armFaces, cg: t, glow: false, order: 5)
+            addArmor(container, 4, 12, 4, inflate: 0.56, inflateW: 0.16, at: leftArm.position, faces: armFaces, cg: t, glow: false, order: 5, mirror: true)
         }
-        if let t = bootsTrim {
-            addArmor(container, 4, 12, 4, inflate: 1.16, at: rightLeg.position, faces: legFaces, cg: t, glow: false, order: 5)
-            addArmor(container, 4, 12, 4, inflate: 1.16, at: leftLeg.position, faces: legFaces, cg: t, glow: false, order: 5)
+        if let t = e.bootsTrim {
+            addArmor(container, 4, 12, 4, inflate: 0.61, inflateW: 0.1, at: rightLeg.position, faces: legFaces, cg: t, glow: false, order: 5, mirror: true)
+            addArmor(container, 4, 12, 4, inflate: 0.61, inflateW: 0.1, at: leftLeg.position, faces: legFaces, cg: t, glow: false, order: 5)
         }
 
         // Held item attaches to the right hand (child of the arm, so it moves with it).
-        if item == .sword, let swordTexture {
+        if e.item == .sword, let swordTexture = e.swordTexture {
             // Real Minecraft sword extruded pixel-by-pixel into a true 3D item.
-            let node = swordModel(from: swordTexture, enchanted: enchanted)
+            let node = swordModel(from: swordTexture, enchanted: e.enchanted)
             // Sideways, blade up-and-forward, handle in the fist.
             node.position = SCNVector3(0, -0.5, 6)
             node.eulerAngles = SCNVector3(0, -Float.pi / 2, 0)
@@ -449,19 +603,26 @@ enum MinecraftModel {
 
     /// Add an inflated, textured armor layer over a base part.
     private static func addArmor(_ parent: SCNNode, _ w: CGFloat, _ h: CGFloat, _ d: CGFloat,
-                                 inflate: CGFloat, at position: SCNVector3, faces: [Face], cg: CGImage,
-                                 glow: Bool = true, order: Int = 2, tint: NSColor? = nil) {
-        let node = box(w + inflate, h + inflate, d + inflate, faces: faces, cg: cg, transparent: true)
+                                 inflate: CGFloat, inflateW: CGFloat? = nil,
+                                 at position: SCNVector3, faces: [Face], cg: CGImage,
+                                 glow: Bool = true, order: Int = 2, tint: NSColor? = nil,
+                                 mirror: Bool = false) {
+        // inflateW lets side-by-side parts (legs, arms) stay flush so they don't merge.
+        let node = box(w + (inflateW ?? inflate), h + inflate, d + inflate, faces: faces, cg: cg, transparent: true)
         node.position = position
         node.renderingOrder = order
+        // Minecraft mirrors the left limb's texture from the right; flip this side to match.
+        if mirror { node.scale = SCNVector3(-1, 1, 1) }
         if let tint {   // greyscale leather is dyed by multiplying with its colour
             node.geometry?.materials.forEach { $0.multiply.contents = tint }
         }
         if glow {
-            // Faint purple enchant sheen (masked by the texture's alpha).
+            // Enchant glint: a faint violet sheen, not a full glow. Real Minecraft
+            // overlays a subtle scrolling purple shimmer; we approximate with a very
+            // low-intensity emission so the armor's own colour stays dominant.
             node.geometry?.materials.forEach { mat in
-                mat.emission.contents = NSColor(red: 0.55, green: 0.20, blue: 0.95, alpha: 1)
-                mat.emission.intensity = 0.15
+                mat.emission.contents = NSColor(red: 0.64, green: 0.21, blue: 0.93, alpha: 1)
+                mat.emission.intensity = 0.06
             }
         }
         parent.addChildNode(node)
@@ -530,8 +691,8 @@ enum MinecraftModel {
                                              blue: CGFloat(data[i + 2]) / 255, alpha: 1)
                 m.lightingModel = .blinn
                 if enchanted {
-                    m.emission.contents = NSColor(red: 0.55, green: 0.20, blue: 0.95, alpha: 1)
-                    m.emission.intensity = 0.15
+                    m.emission.contents = NSColor(red: 0.64, green: 0.21, blue: 0.93, alpha: 1)
+                    m.emission.intensity = 0.06
                 }
                 box.firstMaterial = m
                 let node = SCNNode(geometry: box)

@@ -32,6 +32,7 @@ struct HomeView: View {
     @State private var heroQuery = ""
     @State private var loading = true
     @State private var busyID: String?
+    @State private var favoritedHeroIDs: Set<String> = []
 
     private let heroTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
@@ -87,9 +88,19 @@ struct HomeView: View {
             let photo = hero[heroIndex % hero.count]
             let title = heroQuery.isEmpty ? "Featured" : heroQuery.capitalized
             ZStack(alignment: .bottomLeading) {
-                AsyncImage(url: URL(string: photo.thumbs.large)) { img in
-                    img.resizable().scaledToFill()
-                } placeholder: { Rectangle().fill(.quaternary) }
+                // Thumb loads instantly; the full-resolution image fades in
+                // on top so the hero is never blurry once loaded.
+                ZStack {
+                    AsyncImage(url: URL(string: photo.thumbs.large)) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: { Rectangle().fill(.quaternary) }
+                    AsyncImage(url: URL(string: photo.path)) { phase in
+                        if case .success(let img) = phase {
+                            img.resizable().scaledToFill()
+                                .transition(.opacity)
+                        }
+                    }
+                }
                 .frame(maxWidth: .infinity).frame(height: 480).clipped()
                 .id(heroIndex)
                 .transition(.opacity)
@@ -116,15 +127,21 @@ struct HomeView: View {
                             Button { preview.present(.remote(photo, service: service, library: library)) } label: {
                                 Label("View Wallpaper", systemImage: "arrow.up.forward")
                                     .font(.callout.weight(.semibold))
+                                    .foregroundStyle(.white)
                                     .padding(.horizontal, 16).padding(.vertical, 10)
+                                    .contentShape(.capsule)
                             }
-                            .buttonStyle(.glass)
-                            Button { Task { await setWallpaper(photo) } } label: {
-                                Image(systemName: "heart.fill").foregroundStyle(.pink)
+                            .buttonStyle(.plain)
+                            .glassEffect(.regular.interactive(), in: .capsule)
+                            Button { Task { await favorite(photo) } } label: {
+                                Image(systemName: favoritedHeroIDs.contains(photo.id) ? "heart.fill" : "heart")
+                                    .foregroundStyle(.pink)
                                     .frame(width: 40, height: 40)
+                                    .contentShape(.circle)
                             }
                             .buttonStyle(.plain)
                             .glassEffect(.regular.interactive(), in: .circle)
+                            .help("Save to Favorites")
                         }
                         .padding(.top, 6)
                     }
@@ -159,6 +176,15 @@ struct HomeView: View {
         busyID = photo.id; defer { busyID = nil }
         if let local = try? await service.download(photo) {
             library.setWallpaper(local, allScreens: rotation.allScreens)
+        }
+    }
+
+    /// Download the photo and add it to Favorites (the hero's heart button).
+    private func favorite(_ photo: WallhavenPhoto) async {
+        guard !favoritedHeroIDs.contains(photo.id) else { return }
+        if let local = try? await service.download(photo) {
+            library.toggleFavorite(local)
+            favoritedHeroIDs.insert(photo.id)
         }
     }
 
@@ -223,13 +249,47 @@ struct HomeView: View {
         async let latestR = try? service.search(query: "nature landscape", page: 1, sorting: "toplist")
         async let popularR = try? service.search(query: "animals pets wildlife", page: 1, sorting: "toplist")
         async let fourKR = try? service.search(query: "technology computer setup", page: 1, sorting: "toplist")
-        heroQuery = SearchHistory.recent.first ?? "nature"
-        async let heroR = try? service.search(query: heroQuery, page: 1, sorting: "relevance")
+        async let heroPhotos = personalizedHero()
         latest = (await latestR)?.data ?? []
         popular = (await popularR)?.data ?? []
         fourK = (await fourKR)?.data ?? []
-        hero = (await heroR)?.data ?? []
+        hero = await heroPhotos
+        heroIndex = 0
         loading = false
+    }
+
+    /// Blend the user's recent searches into the Featured rotation instead of
+    /// only echoing the single latest one. Results are interleaved so each
+    /// interest shows up as the hero cycles, deduped by photo id.
+    private func personalizedHero() async -> [WallhavenPhoto] {
+        let recents = Array(SearchHistory.recent.prefix(3))
+        guard !recents.isEmpty else {
+            heroQuery = ""
+            return (try? await service.search(query: "nature", sorting: "relevance"))?.data ?? []
+        }
+        heroQuery = recents.count == 1 ? recents[0] : "For You"
+
+        let buckets: [[WallhavenPhoto]] = await withTaskGroup(of: (Int, [WallhavenPhoto]).self) { group in
+            for (i, query) in recents.enumerated() {
+                group.addTask {
+                    (i, (try? await service.search(query: query, sorting: "relevance"))?.data ?? [])
+                }
+            }
+            var out = [[WallhavenPhoto]](repeating: [], count: recents.count)
+            for await (i, photos) in group { out[i] = photos }
+            return out
+        }
+
+        // Interleave: best of search 1, best of search 2, … then second-best, etc.
+        var mixed: [WallhavenPhoto] = []
+        var seen = Set<String>()
+        for rank in 0..<(buckets.map(\.count).max() ?? 0) {
+            for bucket in buckets where rank < bucket.count {
+                let photo = bucket[rank]
+                if seen.insert(photo.id).inserted { mixed.append(photo) }
+            }
+        }
+        return Array(mixed.prefix(12))
     }
 }
 
