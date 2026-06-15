@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Minecraft Studio</title>
+<style>
+  :root{ color-scheme:dark; --accent:#3b82f6; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif; background:#000; color:#f2f2f5; overflow:hidden; }
+  #stage{ position:fixed; inset:0; background:radial-gradient(130% 130% at 50% 25%, #15151c 0%, #050507 70%); }
+  #canvas{ width:100%; height:100%; display:block; }
+
+  /* Floating frosted sidebar (browser-supported "glass") */
+  #panel{
+    position:fixed; left:16px; top:16px; bottom:16px; width:280px; padding:18px;
+    border-radius:24px; background:rgba(24,24,29,.66);
+    backdrop-filter:blur(34px) saturate(150%); -webkit-backdrop-filter:blur(34px) saturate(150%);
+    border:1px solid rgba(255,255,255,.09); box-shadow:0 24px 70px rgba(0,0,0,.55);
+    overflow-y:auto; scrollbar-width:thin;
+  }
+  .title{ display:flex; align-items:center; gap:10px; font-size:17px; font-weight:600; margin-bottom:16px; }
+  .title .ic{ width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#2a2a31,#0e0e12);display:grid;place-items:center;font-size:14px;border:1px solid rgba(255,255,255,.08); }
+  .field{ margin-bottom:14px; }
+  .field > label{ display:block; font-size:11px; color:#9a9aa3; margin-bottom:6px; }
+  .pill{ display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.07); border-radius:999px; padding:8px 12px; }
+  .pill input{ flex:1; background:none; border:none; color:#fff; font-size:13px; outline:none; }
+  .pill button{ background:none;border:none;color:#fff;cursor:pointer;font-size:16px;display:grid;place-items:center; opacity:.85; }
+
+  .row{ display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.06); border-radius:12px; padding:8px 10px; margin-bottom:8px; }
+  .row .chip{ width:24px;height:24px;border-radius:6px;display:grid;place-items:center;font-size:12px;color:#fff; flex:none; }
+  .row .lbl{ font-size:13px; flex:1; }
+  .row select{ background:rgba(255,255,255,.08); color:#fff; border:1px solid rgba(255,255,255,.12); border-radius:7px; padding:4px 6px; font-size:12px; }
+  /* iOS-style switch */
+  .sw{ position:relative; width:38px;height:22px; flex:none; }
+  .sw input{ display:none; }
+  .sw span{ position:absolute; inset:0; background:rgba(255,255,255,.18); border-radius:999px; transition:.18s; }
+  .sw span::after{ content:""; position:absolute; width:18px;height:18px;left:2px;top:2px;background:#fff;border-radius:50%; transition:.18s; }
+  .sw input:checked + span{ background:var(--accent); }
+  .sw input:checked + span::after{ transform:translateX(16px); }
+
+  .sectionhdr{ display:flex; align-items:center; justify-content:space-between; margin:16px 0 8px; }
+  .sectionhdr h3{ font-size:14px; margin:0; }
+
+  /* recipe rows */
+  .trimcard{ background:rgba(255,255,255,.05); border-radius:16px; padding:12px; }
+  .trim{ margin-bottom:12px; }
+  .trim:last-child{ margin-bottom:0; }
+  .trim .name{ font-size:11px; color:#9a9aa3; margin-bottom:5px; }
+  .cells{ display:flex; align-items:center; gap:5px; }
+  .cell{ flex:1; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:7px 3px; text-align:center; cursor:pointer; }
+  .cell.ro{ cursor:default; border-color:transparent; }
+  .cell .ig{ height:30px; display:grid; place-items:center; }
+  .cell img{ width:30px;height:30px; image-rendering:pixelated; }
+  .cell .cap{ font-size:9px; color:#b9b9c2; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .plus{ color:#777; font-size:11px; }
+
+  .primary{ width:100%; margin-top:16px; padding:11px; border:none; border-radius:999px; background:rgba(255,255,255,.12); color:#fff; font-weight:600; font-size:14px; cursor:pointer; backdrop-filter:blur(10px); }
+  .primary:hover{ background:rgba(255,255,255,.18); }
+  .hint{ font-size:11px; color:#71717a; margin-top:8px; text-align:center; }
+
+  /* modal picker */
+  #modal{ position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; place-items:center; z-index:50; }
+  #modal.open{ display:grid; }
+  .sheet{ width:min(440px,90vw); max-height:80vh; overflow:auto; background:rgba(28,28,34,.92); backdrop-filter:blur(40px); border:1px solid rgba(255,255,255,.1); border-radius:18px; padding:16px; }
+  .sheet h4{ margin:0 0 12px; font-size:14px; }
+  .grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .tile{ background:rgba(255,255,255,.05); border:2px solid transparent; border-radius:10px; padding:8px 4px; text-align:center; cursor:pointer; }
+  .tile.sel{ border-color:var(--accent); background:rgba(59,130,246,.18); }
+  .tile img{ width:34px;height:34px;image-rendering:pixelated; }
+  .tile .cap{ font-size:9px;color:#b9b9c2;margin-top:4px; white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="canvas"></canvas></div>
+
+<aside id="panel">
+  <div class="title"><span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><path d="M3 20h18L14.5 7 11 13 8.5 9z"/></svg></span> Character</div>
+
+  <div class="field">
+    <label>Username</label>
+    <div class="pill">
+      <input id="username" placeholder="e.g. Notch" value="Notch" />
+      <button id="load" title="Load"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
+    </div>
+  </div>
+
+  <div class="row">
+    <span class="chip" style="background:linear-gradient(135deg,#3b82f6,#1e40af)"><svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M12 2l8 3v6c0 5-3.4 9-8 11-4.6-2-8-6-8-11V5z"/></svg></span>
+    <span class="lbl">Armor</span>
+    <select id="armor">
+      <option value="none">None</option><option value="leather">Leather</option>
+      <option value="chainmail">Chainmail</option><option value="iron">Iron</option>
+      <option value="gold">Gold</option><option value="diamond">Diamond</option>
+      <option value="netherite" selected>Netherite</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <span class="chip" style="background:linear-gradient(135deg,#f59e0b,#b45309)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M14 6h4v4"/></svg></span>
+    <span class="lbl">Held item</span>
+    <select id="held">
+      <option value="none" selected>None</option>
+      <option value="sword">Sword</option>
+      <option value="trident">Trident</option>
+    </select>
+  </div>
+
+  <div id="trimwrap" class="field">
+    <div class="row">
+      <span class="chip" style="background:linear-gradient(135deg,#a855f7,#6b21a8)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M9.5 14.5a4 4 0 005.7 0l2.3-2.3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14.5 9.5a4 4 0 00-5.7 0l-2.3 2.3a4 4 0 005.7 5.7l1-1"/></svg></span>
+      <span class="lbl">Same on every piece</span>
+      <label class="sw"><input type="checkbox" id="matchall" checked /><span></span></label>
+    </div>
+    <div class="sectionhdr"><h3>Trims</h3></div>
+    <div id="trimcard" class="trimcard"></div>
+  </div>
+
+  <div class="row">
+    <span class="chip" style="background:linear-gradient(135deg,#ec4899,#9d174d)"><svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M12 2l1.7 5.1a3 3 0 002.2 2.2L21 11l-5.1 1.7a3 3 0 00-2.2 2.2L12 20l-1.7-5.1a3 3 0 00-2.2-2.2L3 11l5.1-1.7a3 3 0 002.2-2.2z"/></svg></span>
+    <span class="lbl">Enchanted glint</span>
+    <label class="sw"><input type="checkbox" id="glint" /><span></span></label>
+  </div>
+
+  <button class="primary" id="setwall">Set as Wallpaper</button>
+  <button class="primary" id="download" style="background:rgba(255,255,255,.08);margin-top:8px">Download image</button>
+  <button id="backBtn" style="background:none;border:none;color:#8a8a93;cursor:pointer;margin-top:10px;font:inherit">← Back to Wallpaper Studio</button>
+  <div class="hint">Drag to rotate · scroll to zoom</div>
+  <div class="hint" style="margin-top:14px; line-height:1.5; color:#62626b;">
+    Trident model “<a href="https://skfb.ly/oPTHs" target="_blank" rel="noopener" style="color:#8a8a93;">Minecraft trident</a>” by BoBkiNN_,
+    licensed <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener" style="color:#8a8a93;">CC BY 4.0</a>.
+    Skins via Minotar · armor/trim textures © Mojang. Not affiliated with Mojang.
+  </div>
+</aside>
+
+<div id="modal"><div class="sheet"><h4 id="sheetTitle"></h4><div class="grid" id="sheetGrid"></div></div></div>
+
+<script type="importmap">
+{ "imports": {
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const MC="https://raw.githubusercontent.com/misode/mcmeta/assets/assets/minecraft/textures";
+const PATTERNS=["coast","sentry","dune","wild","ward","eye","vex","tide","snout","rib","spire","wayfinder","shaper","silence","raiser","host","flow","bolt"];
+const MAT_ITEM={quartz:"quartz",iron:"iron_ingot",gold:"gold_ingot",lapis:"lapis_lazuli",emerald:"emerald",diamond:"diamond",netherite:"netherite_ingot",redstone:"redstone",copper:"copper_ingot",amethyst:"amethyst_shard",resin:"resin_brick"};
+const MATERIALS=Object.keys(MAT_ITEM);
+const ARMOR_ITEM={leather:"leather",chainmail:"chainmail",iron:"iron",gold:"golden",diamond:"diamond",netherite:"netherite"};
+const ARMOR_TINT={leather:[0.65,0.40,0.25]};
+const PIECES=[["helmet","Helmet"],["chest","Chestplate"],["leggings","Leggings"],["boots","Boots"]];
+const PIECE_ITEM={helmet:"helmet",chest:"chestplate",leggings:"leggings",boots:"boots"};
+
+// state
+const S={ skin:null, armor:"netherite", matchAll:true, glint:false, heldItem:"none",
+  all:{pattern:"none",material:"diamond"},
+  pieces:{helmet:{pattern:"none",material:"diamond"},chest:{pattern:"none",material:"diamond"},leggings:{pattern:"none",material:"diamond"},boots:{pattern:"none",material:"diamond"}} };
+
+// ---- texture helpers ----
+function loadImage(u){return new Promise((res,rej)=>{const i=new Image();i.crossOrigin="anonymous";i.onload=()=>res(i);i.onerror=()=>rej();i.src=u;});}
+function canvasFrom(img){const c=document.createElement("canvas");c.width=img.width;c.height=img.height;const x=c.getContext("2d",{willReadFrequently:true});x.imageSmoothingEnabled=false;x.drawImage(img,0,0);return c;}
+function texFromCanvas(c){const t=new THREE.CanvasTexture(c);t.magFilter=t.minFilter=THREE.NearestFilter;t.generateMipmaps=false;t.colorSpace=THREE.SRGBColorSpace;return t;}
+const cache=new Map();
+function tex(p){ if(cache.has(p))return cache.get(p); const q=loadImage(`${MC}/${p}.png`).then(canvasFrom).catch(()=>null); cache.set(p,q); return q; }
+function readRow(c){const x=c.getContext("2d");const d=x.getImageData(0,0,c.width,1).data;const o=[];for(let i=0;i<c.width;i++){const k=i*4;if(d[k+3]>0)o.push([d[k],d[k+1],d[k+2]]);}return o;}
+async function recolor(patternCanvas,material){const key=await tex("trims/color_palettes/trim_palette"),pal=await tex(`trims/color_palettes/${material}`);if(!patternCanvas||!key||!pal)return null;const K=readRow(key),P=readRow(pal);const o=document.createElement("canvas");o.width=patternCanvas.width;o.height=patternCanvas.height;const c=o.getContext("2d");c.drawImage(patternCanvas,0,0);const id=c.getImageData(0,0,o.width,o.height),d=id.data;for(let i=0;i<d.length;i+=4){if(!d[i+3])continue;let b=0,bd=1e9;for(let k=0;k<K.length;k++){const dr=d[i]-K[k][0],dg=d[i+1]-K[k][1],db=d[i+2]-K[k][2];const v=dr*dr+dg*dg+db*db;if(v<bd){bd=v;b=k;}}const p=P[Math.min(b,P.length-1)];d[i]=p[0];d[i+1]=p[1];d[i+2]=p[2];}c.putImageData(id,0,0);return o;}
+function tint(src,rgb){const c=document.createElement("canvas");c.width=src.width;c.height=src.height;const x=c.getContext("2d");x.drawImage(src,0,0);const id=x.getImageData(0,0,c.width,c.height),d=id.data;for(let i=0;i<d.length;i+=4){if(!d[i+3])continue;d[i]*=rgb[0];d[i+1]*=rgb[1];d[i+2]*=rgb[2];}x.putImageData(id,0,0);return c;}
+
+// ---- geometry ----
+function buildBox(w,h,d,reg,canvas,cut){const g=new THREE.BoxGeometry(w,h,d);const TW=canvas.width,TH=canvas.height;const order=["right","left","top","bottom","front","back"];const uv=g.attributes.uv;order.forEach((key,f)=>{const r=reg[key],o=f*4,u0=r[0]/TW,u1=(r[0]+r[2])/TW,v0=1-(r[1]+r[3])/TH,v1=1-r[1]/TH;uv.setXY(o,u0,v1);uv.setXY(o+1,u1,v1);uv.setXY(o+2,u0,v0);uv.setXY(o+3,u1,v0);});uv.needsUpdate=true;const m=new THREE.MeshBasicMaterial({map:texFromCanvas(canvas)});if(cut){m.transparent=false;m.alphaTest=0.5;}return new THREE.Mesh(g,m);}
+const Rskin={head:{right:[0,8,8,8],left:[16,8,8,8],top:[8,0,8,8],bottom:[16,0,8,8],front:[8,8,8,8],back:[24,8,8,8]},head2:{right:[32,8,8,8],left:[48,8,8,8],top:[40,0,8,8],bottom:[48,0,8,8],front:[40,8,8,8],back:[56,8,8,8]},body:{right:[16,20,4,12],left:[28,20,4,12],top:[20,16,8,4],bottom:[28,16,8,4],front:[20,20,8,12],back:[32,20,8,12]},body2:{right:[16,36,4,12],left:[28,36,4,12],top:[20,32,8,4],bottom:[28,32,8,4],front:[20,36,8,12],back:[32,36,8,12]},armR:{right:[40,20,4,12],left:[48,20,4,12],top:[44,16,4,4],bottom:[48,16,4,4],front:[44,20,4,12],back:[52,20,4,12]},armR2:{right:[40,36,4,12],left:[48,36,4,12],top:[44,32,4,4],bottom:[48,32,4,4],front:[44,36,4,12],back:[52,36,4,12]},armL:{right:[32,52,4,12],left:[40,52,4,12],top:[36,48,4,4],bottom:[40,48,4,4],front:[36,52,4,12],back:[44,52,4,12]},armL2:{right:[48,52,4,12],left:[56,52,4,12],top:[52,48,4,4],bottom:[56,48,4,4],front:[52,52,4,12],back:[60,52,4,12]},legR:{right:[0,20,4,12],left:[8,20,4,12],top:[4,16,4,4],bottom:[8,16,4,4],front:[4,20,4,12],back:[12,20,4,12]},legR2:{right:[0,36,4,12],left:[8,36,4,12],top:[4,32,4,4],bottom:[8,32,4,4],front:[4,36,4,12],back:[12,36,4,12]},legL:{right:[16,52,4,12],left:[24,52,4,12],top:[20,48,4,4],bottom:[24,48,4,4],front:[20,52,4,12],back:[28,52,4,12]},legL2:{right:[0,52,4,12],left:[8,52,4,12],top:[4,48,4,4],bottom:[8,48,4,4],front:[4,52,4,12],back:[12,52,4,12]}};
+const Rarm={head:Rskin.head,body:Rskin.body,arm:Rskin.armR,leg:Rskin.legR};
+
+// ---- scene ----
+const canvas=document.getElementById("canvas");
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(42,1,0.1,2000); camera.position.set(0,2,58);
+const controls=new OrbitControls(camera,canvas); controls.enableDamping=true;
+function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+addEventListener("resize",resize); resize();
+(function loop(){controls.update();renderer.render(scene,camera);requestAnimationFrame(loop);})();
+let group=null;
+
+function part(g,w,h,d,r,r2,pos){const b=buildBox(w,h,d,r,S.skin);b.position.set(...pos);g.add(b);if(r2){const o=buildBox(w+.5,h+.5,d+.5,r2,S.skin,true);o.position.set(...pos);g.add(o);}}
+function armorBox(g,w,h,d,inf,wInf,r,cv,pos,mirror,tn){if(!cv)return;const m=buildBox(w+(wInf??inf),h+inf,d+inf,r,tn?tint(cv,tn):cv,true);m.position.set(...pos);if(mirror)m.scale.x=-1;if(S.glint)m.material.color.setHex(0xf1ecff);g.add(m);}
+
+function pieceTrim(p){return S.matchAll?S.all:S.pieces[p];}
+
+async function rebuild(){
+  if(!S.skin)return;
+  if(group)scene.remove(group);
+  const g=new THREE.Group(); group=g;
+  part(g,8,8,8,Rskin.head,Rskin.head2,[0,10,0]);
+  part(g,8,12,4,Rskin.body,Rskin.body2,[0,0,0]);
+  part(g,4,12,4,Rskin.armR,Rskin.armR2,[-6,0,0]);
+  part(g,4,12,4,Rskin.armL,Rskin.armL2,[6,0,0]);
+  part(g,4,12,4,Rskin.legR,Rskin.legR2,[-2,-12,0]);
+  part(g,4,12,4,Rskin.legL,Rskin.legL2,[2,-12,0]);
+
+  if(S.armor!=="none"){
+    const tn=ARMOR_TINT[S.armor]||null;
+    const l1=await tex(`entity/equipment/humanoid/${S.armor}`);
+    const l2=await tex(`entity/equipment/humanoid_leggings/${S.armor}`);
+    const trimCv=async(p,which)=>{const t=pieceTrim(p);if(t.pattern==="none")return null;const base=await tex(`trims/entity/${which==="legs"?"humanoid_leggings":"humanoid"}/${t.pattern}`);return recolor(base,t.material);};
+    const helmetT=await trimCv("helmet","body"), chestT=await trimCv("chest","body"),
+          legT=await trimCv("leggings","legs"), bootT=await trimCv("boots","body");
+    // layer2 leggings (belt + legs)
+    armorBox(g,8,12,4,0.5,null,Rarm.body,l2,[0,0,0],false,tn);
+    armorBox(g,4,12,4,0.45,0.1,Rarm.leg,l2,[-2,-12,0],true,tn);
+    armorBox(g,4,12,4,0.45,0.1,Rarm.leg,l2,[2,-12,0],false,tn);
+    if(legT){armorBox(g,4,12,4,0.47,0.12,Rarm.leg,legT,[-2,-12,0],true);armorBox(g,4,12,4,0.47,0.12,Rarm.leg,legT,[2,-12,0],false);}
+    // layer1
+    armorBox(g,8,8,8,0.85,null,Rarm.head,l1,[0,10,0],false,tn);
+    armorBox(g,8,12,4,0.55,0.12,Rarm.body,l1,[0,0,0],false,tn);
+    armorBox(g,4,12,4,0.5,0.1,Rarm.arm,l1,[-6,0,0],false,tn);
+    armorBox(g,4,12,4,0.5,0.1,Rarm.arm,l1,[6,0,0],true,tn);
+    armorBox(g,4,12,4,0.55,0.1,Rarm.leg,l1,[-2,-12,0],true,tn);
+    armorBox(g,4,12,4,0.55,0.1,Rarm.leg,l1,[2,-12,0],false,tn);
+    if(helmetT)armorBox(g,8,8,8,0.87,null,Rarm.head,helmetT,[0,10,0],false);
+    if(chestT){armorBox(g,8,12,4,0.57,0.18,Rarm.body,chestT,[0,0,0],false);armorBox(g,4,12,4,0.56,0.12,Rarm.arm,chestT,[-6,0,0],false);armorBox(g,4,12,4,0.56,0.12,Rarm.arm,chestT,[6,0,0],true);}
+    if(bootT){armorBox(g,4,12,4,0.57,0.12,Rarm.leg,bootT,[-2,-12,0],true);armorBox(g,4,12,4,0.57,0.12,Rarm.leg,bootT,[2,-12,0],false);}
+  }
+  await addHeld(g);
+  scene.add(g);
+}
+
+// Held item: sword extruded from its icon; trident built from boxes (icon is only the dropped look).
+const SWORD_TIER={none:"iron",iron:"iron",leather:"wooden",chainmail:"stone",gold:"golden",diamond:"diamond",netherite:"netherite"};
+function glintCol(c){ return S.glint ? c.clone().multiply(new THREE.Color(0xf1ecff)) : c; }
+async function addHeld(g){
+  if(S.heldItem==="none") return;
+  if(S.heldItem==="trident"){ const t=await tridentMesh(); if(t) g.add(t); return; }
+  const cv=await tex(`item/${SWORD_TIER[S.armor]}_sword`); if(!cv) return;
+  g.add(extrudeIcon(cv));
+}
+function extrudeIcon(cv){
+  const w=cv.width,h=cv.height; const d=cv.getContext("2d").getImageData(0,0,w,h).data;
+  const px=14.4/h, depth=px*1.55; const grp=new THREE.Group();
+  const geo=new THREE.BoxGeometry(px,px,depth);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){ const i=(y*w+x)*4; if(d[i+3]<=20) continue;
+    const col=glintCol(new THREE.Color(d[i]/255,d[i+1]/255,d[i+2]/255));
+    const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:col}));
+    m.position.set((x-w/2+0.5)*px,(h-1-y-h/2+0.5)*px,0); grp.add(m);
+  }
+  grp.position.set(-7,-1,4); grp.rotation.z=-0.4;   // held in the right hand
+  return grp;
+}
+// Real Minecraft trident, loaded from the self-contained glTF model.
+const tridentPromise = new Promise(res=>{
+  new GLTFLoader().load("trident.gltf", g=>res(g.scene), undefined, ()=>res(null));
+});
+async function tridentMesh(){
+  const proto = await tridentPromise; if(!proto) return null;
+  const model = proto.clone(true);
+  // GLTFLoader makes lit StandardMaterials → black in our unlit scene. Swap to Basic.
+  // GLTFLoader makes lit StandardMaterials that look glassy/semi-transparent in our
+  // unlit scene. Keep the texture but swap to a flat, fully opaque Basic material so the
+  // real prismarine texture shows as a solid item.
+  model.traverse(o=>{ if(o.isMesh){
+    const map = o.material && o.material.map || null;
+    if(map){ map.magFilter=THREE.NearestFilter; map.minFilter=THREE.NearestFilter; map.generateMipmaps=false; map.needsUpdate=true; }
+    const nm = new THREE.MeshBasicMaterial({ map, color: map ? 0xffffff : 0x9fb0ad, transparent:false, alphaTest:0.5, side:THREE.DoubleSide });
+    if(S.glint) nm.color.multiply(new THREE.Color(0xf1ecff));
+    o.material = nm;
+  }});
+  // Stand the longest axis up (Y), then scale to ~22 tall and centre.
+  let b=new THREE.Box3().setFromObject(model), sz=new THREE.Vector3(); b.getSize(sz);
+  if(sz.z>=sz.x && sz.z>=sz.y) model.rotation.x=-Math.PI/2;
+  else if(sz.x>=sz.y && sz.x>=sz.z) model.rotation.z=Math.PI/2;
+  model.updateMatrixWorld(true);
+  b=new THREE.Box3().setFromObject(model); b.getSize(sz);
+  model.scale.setScalar(22/Math.max(sz.x,sz.y,sz.z));
+  model.updateMatrixWorld(true);
+  b=new THREE.Box3().setFromObject(model); const c=new THREE.Vector3(); b.getCenter(c);
+  // The model is built upside-down for holding: the prongs sit at the -Y end and the
+  // plain handle runs up to +Y. Grip the shaft (45% down from the butt) at the origin,
+  // flip 180° about X so the prongs point +Y, and roll 90° about the shaft so the prong
+  // fan faces the camera in profile (otherwise it's edge-on and reads as a flat paddle).
+  const gripY = b.max.y - 0.45*(b.max.y-b.min.y);
+  model.position.set(-c.x, -gripY, -c.z);
+  const flip=new THREE.Group(); flip.rotation.x=Math.PI; flip.add(model);
+  const roll=new THREE.Group(); roll.rotation.y=Math.PI/2; roll.add(flip);
+  const grp=new THREE.Group(); grp.add(roll);
+  // Drowned-style hold: presented forward (+Z, the way the body faces) and angled up
+  // ~30°, grip at the right hand. Forward rather than sideways keeps it full-length at
+  // rotated viewing angles instead of foreshortening to a stub.
+  grp.position.set(-6,-2.5,2); grp.rotation.x=Math.PI/2 - Math.PI/6;
+  return grp;
+}
+
+// ---- UI: recipe rows ----
+function trimCard(){
+  const wrap=document.getElementById("trimcard"); wrap.innerHTML="";
+  const rows = S.matchAll ? [["all","All pieces"]] : PIECES;
+  rows.forEach(([key,label])=>{
+    const t = key==="all"?S.all:S.pieces[key];
+    const piece = key==="all"?"chest":key;
+    const armorIcon = `${MC}/item/${ARMOR_ITEM[S.armor]||"netherite"}_${PIECE_ITEM[piece]}.png`;
+    const patImg = t.pattern==="none" ? `<span class="plus">+</span>` : `<img src="${MC}/item/${t.pattern}_armor_trim_smithing_template.png">`;
+    const matImg = t.pattern==="none" ? `<span class="plus">–</span>` : `<img src="${MC}/item/${MAT_ITEM[t.material]}.png">`;
+    const el=document.createElement("div"); el.className="trim";
+    el.innerHTML=`<div class="name">${label}</div><div class="cells">
+      <div class="cell" data-pat="${key}"><div class="ig">${patImg}</div><div class="cap">${t.pattern==="none"?"Add trim":cap(t.pattern)}</div></div>
+      <div class="cell ro"><div class="ig"><img src="${armorIcon}"></div><div class="cap">${cap(S.armor)}</div></div>
+      <div class="cell" data-mat="${key}"><div class="ig">${matImg}</div><div class="cap">${t.pattern==="none"?"—":cap(t.material)}</div></div></div>`;
+    wrap.appendChild(el);
+  });
+  wrap.querySelectorAll("[data-pat]").forEach(c=>c.onclick=()=>openPattern(c.dataset.pat));
+  wrap.querySelectorAll("[data-mat]").forEach(c=>{ const k=c.dataset.mat; const t=k==="all"?S.all:S.pieces[k]; if(t.pattern!=="none") c.onclick=()=>openMaterial(k); });
+}
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+
+// modal pickers
+const modal=document.getElementById("modal"), sheetGrid=document.getElementById("sheetGrid"), sheetTitle=document.getElementById("sheetTitle");
+modal.onclick=e=>{ if(e.target===modal) modal.classList.remove("open"); };
+function openPattern(key){
+  const t=key==="all"?S.all:S.pieces[key]; sheetTitle.textContent="Choose pattern"; sheetGrid.innerHTML="";
+  const mk=(p,img,label)=>{const d=document.createElement("div");d.className="tile"+(t.pattern===p?" sel":"");d.innerHTML=`<div>${img}</div><div class="cap">${label}</div>`;d.onclick=()=>{set(key,"pattern",p);modal.classList.remove("open");};return d;};
+  sheetGrid.appendChild(mk("none",`<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M6 6l12 12"/></svg>`,"None"));
+  PATTERNS.forEach(p=>sheetGrid.appendChild(mk(p,`<img src="${MC}/item/${p}_armor_trim_smithing_template.png">`,cap(p))));
+  modal.classList.add("open");
+}
+function openMaterial(key){
+  const t=key==="all"?S.all:S.pieces[key]; sheetTitle.textContent="Choose material"; sheetGrid.innerHTML="";
+  MATERIALS.forEach(m=>{const d=document.createElement("div");d.className="tile"+(t.material===m?" sel":"");d.innerHTML=`<div><img src="${MC}/item/${MAT_ITEM[m]}.png"></div><div class="cap">${cap(m)}</div>`;d.onclick=()=>{set(key,"material",m);modal.classList.remove("open");};sheetGrid.appendChild(d);});
+  modal.classList.add("open");
+}
+function set(key,field,val){ const t=key==="all"?S.all:S.pieces[key]; t[field]=val; trimCard(); rebuild(); }
+
+// ---- load ----
+async function load(){
+  const name=document.getElementById("username").value.trim(); if(!name)return;
+  try{
+    const img=await loadImage(`https://minotar.net/skin/${encodeURIComponent(name)}`);
+    let c=canvasFrom(img);
+    if(c.height<64){const c2=document.createElement("canvas");c2.width=64;c2.height=64;const x=c2.getContext("2d");x.imageSmoothingEnabled=false;x.drawImage(c,0,0);x.drawImage(c,40,20,16,12,32,52,16,12);x.drawImage(c,0,20,16,12,16,52,16,12);c=c2;}
+    S.skin=c; rebuild();
+  }catch(e){ /* keep previous */ }
+}
+
+// wire up
+document.getElementById("load").onclick=load;
+document.getElementById("username").addEventListener("keydown",e=>{if(e.key==="Enter")load();});
+document.getElementById("armor").onchange=e=>{S.armor=e.target.value;trimCard();rebuild();};
+document.getElementById("matchall").onchange=e=>{S.matchAll=e.target.checked;trimCard();rebuild();};
+document.getElementById("glint").onchange=e=>{S.glint=e.target.checked;rebuild();};
+document.getElementById("held").onchange=e=>{S.heldItem=e.target.value;rebuild();};
+document.getElementById("download").onclick=()=>{const a=document.createElement("a");a.download="minecraft-character.png";a.href=renderer.domElement.toDataURL("image/png");a.click();};
+// Desktop app: set the rendered character as the wallpaper, and a back button.
+document.getElementById("backBtn").onclick=()=>{ window.location.href="index.html"; };
+document.getElementById("setwall").onclick=async(e)=>{
+  const inv = window.__TAURI__ && window.__TAURI__.core.invoke;
+  if(!inv){ alert("Open this in the desktop app to set wallpapers."); return; }
+  const btn=e.target; btn.textContent="Setting…"; btn.disabled=true;
+  try{
+    renderer.render(scene,camera);                       // ensure the buffer is current
+    const b64 = renderer.domElement.toDataURL("image/png");
+    const path = await inv("save_b64",{subdir:"generated", name:"minecraft.png", b64});
+    await inv("set_wallpaper_path",{path});
+    btn.textContent="Set ✓";
+  }catch(err){ btn.textContent="Failed"; console.error(err); }
+  setTimeout(()=>{ btn.textContent="Set as Wallpaper"; btn.disabled=false; }, 1800);
+};
+trimCard(); load();
+</script>
+
+<!-- Desktop (Tauri) update check: only runs inside the installed app, never on the website. -->
+<script>
+// Bump APP_VERSION to match each desktop release tag (desktop-v<APP_VERSION>).
+const APP_VERSION = "1.2.0";
+const GH_REPO = "OwenCope/wallpaper-app";
+function verGt(a, b){
+  const pa = a.split(".").map(n=>parseInt(n,10)||0), pb = b.split(".").map(n=>parseInt(n,10)||0);
+  for(let i=0;i<Math.max(pa.length,pb.length);i++){ const d=(pa[i]||0)-(pb[i]||0); if(d) return d>0; }
+  return false;
+}
+async function checkForUpdate(){
+  if(!window.__TAURI__) return;            // installed desktop app only
+  try{
+    const r = await fetch(`https://api.github.com/repos/${GH_REPO}/releases?per_page=15`, {headers:{Accept:"application/vnd.github+json"}});
+    if(!r.ok) return;
+    const rels = await r.json();
+    // Only consider the desktop channel so the official macOS releases are ignored.
+    const desk = rels.filter(x=>typeof x.tag_name==="string" && x.tag_name.startsWith("desktop-v"));
+    if(!desk.length) return;
+    const latest = desk[0];
+    const latestVer = latest.tag_name.replace(/^desktop-v/,"");
+    if(!verGt(latestVer, APP_VERSION)) return;
+    showUpdateBanner(latestVer, latest.html_url);
+  }catch(e){ /* offline or rate-limited: silently skip */ }
+}
+function showUpdateBanner(ver, url){
+  const bar = document.createElement("div");
+  bar.style.cssText = "position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;display:flex;gap:12px;align-items:center;padding:10px 14px;border-radius:14px;background:rgba(24,24,29,.92);border:1px solid rgba(255,255,255,.12);box-shadow:0 18px 50px rgba(0,0,0,.5);font:14px -apple-system,Segoe UI,sans-serif;color:#f2f2f5;backdrop-filter:blur(20px)";
+  bar.innerHTML = `<span>Update available — <b>${ver}</b></span>`;
+  const dl = document.createElement("button");
+  dl.textContent = "Download";
+  dl.style.cssText = "background:var(--accent);color:#fff;border:none;border-radius:9px;padding:7px 14px;cursor:pointer;font-weight:600";
+  dl.onclick = ()=>{ try{ window.__TAURI__.core.invoke("plugin:opener|open_url", { url }); }catch(e){} };
+  const x = document.createElement("button");
+  x.textContent = "Later";
+  x.style.cssText = "background:none;color:#9a9aa3;border:none;cursor:pointer";
+  x.onclick = ()=> bar.remove();
+  bar.append(dl, x);
+  document.body.appendChild(bar);
+}
+checkForUpdate();
+</script>
+</body>
+</html>

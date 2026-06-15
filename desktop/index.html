@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wallpaper Studio</title>
+<style>
+  :root{ color-scheme:dark; --accent:#3b82f6; --card:rgba(255,255,255,.05); --line:rgba(255,255,255,.09); }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; font-family:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+    background:radial-gradient(130% 130% at 50% 0%, #15151c 0%, #050507 70%); color:#f2f2f5; overflow:hidden; }
+  #app{ display:flex; flex-direction:column; height:100%; }
+
+  /* Top bar */
+  header{ display:flex; align-items:center; gap:14px; padding:12px 18px; border-bottom:1px solid var(--line); -webkit-app-region:drag; }
+  .brand{ font-weight:700; letter-spacing:.2px; margin-right:6px; }
+  nav{ display:flex; gap:4px; -webkit-app-region:no-drag; }
+  nav button{ background:none; border:none; color:#b9b9c2; font:inherit; font-size:14px; padding:7px 14px; border-radius:10px; cursor:pointer; }
+  nav button.active{ background:var(--card); color:#fff; }
+  nav button:hover:not(.active){ color:#fff; }
+  .spacer{ flex:1; }
+  .iconbtn{ -webkit-app-region:no-drag; background:var(--card); border:1px solid var(--line); color:#cfcfd6; width:34px; height:34px; border-radius:9px; cursor:pointer; font-size:15px; }
+
+  main{ flex:1; overflow-y:auto; padding:22px; scrollbar-width:thin; }
+  .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  h2{ font-size:20px; margin:0 0 14px; }
+  h3{ font-size:14px; color:#a9a9b3; margin:24px 0 10px; text-transform:uppercase; letter-spacing:.6px; }
+  .search{ display:flex; gap:8px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 14px; width:520px; max-width:100%; }
+  .search input{ background:none; border:none; color:#fff; font:inherit; font-size:15px; width:100%; outline:none; }
+  button.primary{ background:var(--accent); color:#fff; border:none; border-radius:10px; padding:9px 16px; font:inherit; font-weight:600; cursor:pointer; }
+  button.ghost{ background:var(--card); border:1px solid var(--line); color:#e7e7ec; border-radius:10px; padding:9px 14px; font:inherit; cursor:pointer; }
+  select,input[type=text]{ background:var(--card); border:1px solid var(--line); color:#fff; border-radius:9px; padding:8px 10px; font:inherit; }
+
+  /* Grids */
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:16px; margin-top:16px; }
+  .card{ position:relative; aspect-ratio:16/9; border-radius:14px; overflow:hidden; background:#1a1a22; border:1px solid var(--line); cursor:pointer; }
+  .card img{ width:100%; height:100%; object-fit:cover; display:block; transition:transform .25s; }
+  .card:hover img{ transform:scale(1.04); }
+  .card .meta{ position:absolute; left:0; right:0; bottom:0; padding:8px 10px; font-size:11px; color:#fff;
+    background:linear-gradient(transparent, rgba(0,0,0,.75)); display:flex; justify-content:space-between; align-items:center; }
+  .card .actions{ position:absolute; inset:0; display:flex; gap:8px; align-items:center; justify-content:center; opacity:0;
+    background:rgba(0,0,0,.45); transition:opacity .2s; }
+  .card:hover .actions{ opacity:1; }
+  .card .actions button{ font-size:12px; padding:7px 11px; }
+  .badge{ position:absolute; top:8px; left:8px; background:rgba(0,0,0,.6); border-radius:6px; padding:2px 7px; font-size:10px; font-weight:700; }
+  .fav{ position:absolute; top:8px; right:8px; background:rgba(0,0,0,.5); border:none; color:#fff; border-radius:50%; width:28px; height:28px; cursor:pointer; }
+  .fav.on{ color:#ff5a7a; }
+  .tiles{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+  .tile{ aspect-ratio:16/10; border-radius:14px; cursor:pointer; display:flex; align-items:flex-end; padding:12px; font-weight:600; color:#fff; }
+  .empty{ color:#8a8a93; text-align:center; padding:60px 20px; }
+  .toast{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:rgba(20,20,26,.95); border:1px solid var(--line);
+    padding:10px 16px; border-radius:12px; font-size:13px; z-index:50; box-shadow:0 18px 50px rgba(0,0,0,.5); }
+  .gradcard{ aspect-ratio:16/9; border-radius:14px; cursor:pointer; border:1px solid var(--line); position:relative; overflow:hidden; }
+  .gradcard span{ position:absolute; bottom:8px; left:10px; font-weight:600; font-size:13px; text-shadow:0 1px 4px rgba(0,0,0,.6); }
+  .setting{ display:flex; align-items:center; justify-content:space-between; background:var(--card); border:1px solid var(--line);
+    border-radius:12px; padding:12px 14px; margin-bottom:10px; max-width:520px; }
+  label{ font-size:14px; }
+  .hide{ display:none !important; }
+  .spin{ width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s 1s linear infinite;margin:40px auto;}
+  @keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <span class="brand">🖼️ Wallpaper Studio</span>
+    <nav id="nav">
+      <button data-tab="home" class="active">Home</button>
+      <button data-tab="explore">Explore</button>
+      <button data-tab="library">Library</button>
+      <button data-tab="generate">Generate</button>
+      <button data-tab="minecraft">Minecraft</button>
+    </nav>
+    <span class="spacer"></span>
+    <button class="iconbtn" id="settingsBtn" title="Settings">⚙️</button>
+  </header>
+  <main id="main"></main>
+</div>
+
+<script>
+const TAURI = window.__TAURI__;
+const invoke = TAURI ? TAURI.core.invoke : async()=>{ throw new Error("not in app"); };
+const toFileSrc = TAURI ? TAURI.core.convertFileSrc : (p)=>p;
+const main = document.getElementById("main");
+
+// ---------- tiny persistent store (JSON files in app data) ----------
+async function load(name, fallback){ try{ const t=await invoke("read_store",{name}); return t? JSON.parse(t):fallback; }catch(e){ return fallback; } }
+async function save(name, value){ try{ await invoke("write_store",{name, contents:JSON.stringify(value)}); }catch(e){} }
+let settings = { apiKey:"", rotateMins:0, favoritesOnly:false };
+let favorites = [];          // absolute paths
+let libraryFolder = "";
+
+function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2600); }
+
+// ---------- Wallhaven ----------
+const WH = "https://wallhaven.cc/api/v1";
+async function whSearch({q="", page=1, sorting="toplist"}){
+  let url = `${WH}/search?categories=111&purity=100&atleast=1920x1080&sorting=${sorting}&page=${page}`;
+  if(q) url += `&q=${encodeURIComponent(q)}`;
+  if(settings.apiKey) url += `&apikey=${settings.apiKey}`;
+  const txt = await invoke("http_get",{url});
+  return JSON.parse(txt);
+}
+async function setWallpaperFromUrl(url, btn){
+  if(btn){ btn.disabled=true; btn.textContent="Setting…"; }
+  try{ await invoke("set_wallpaper_url",{url}); toast("Wallpaper set ✓"); }
+  catch(e){ toast("Failed: "+e); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent="Set"; } }
+}
+
+function whCard(p){
+  const c=document.createElement("div"); c.className="card";
+  const is4k = p.resolution && (p.resolution.startsWith("3840")||p.resolution.startsWith("7680"));
+  c.innerHTML = `<img loading="lazy" src="${p.thumbs.large}" alt="">
+    ${is4k?'<span class="badge">4K</span>':''}
+    <div class="meta"><span>${p.resolution||""}</span></div>
+    <div class="actions">
+      <button class="primary set">Set</button>
+      <button class="ghost dl">Save</button>
+    </div>`;
+  c.querySelector(".set").onclick=(e)=>{ e.stopPropagation(); setWallpaperFromUrl(p.path, e.target); };
+  c.querySelector(".dl").onclick=async(e)=>{ e.stopPropagation(); e.target.textContent="Saving…";
+    try{ const path=await invoke("download_file",{subdir:"library", name:null, url:p.path}); toast("Saved to Library"); }
+    catch(err){ toast("Save failed"); } e.target.textContent="Save"; };
+  return c;
+}
+
+// ---------- Views ----------
+const CATEGORIES = [
+  ["Nature","nature landscape","linear-gradient(135deg,#2e7d32,#1b5e20)"],
+  ["Animals","animals wildlife","linear-gradient(135deg,#8d6e63,#4e342e)"],
+  ["Tech","technology setup","linear-gradient(135deg,#37474f,#102027)"],
+  ["Space","space galaxy stars","linear-gradient(135deg,#311b92,#000)"],
+  ["Minimal","minimal abstract","linear-gradient(135deg,#546e7a,#263238)"],
+  ["Mountains","mountains","linear-gradient(135deg,#455a64,#1c313a)"],
+  ["Ocean","ocean sea water","linear-gradient(135deg,#0277bd,#01579b)"],
+  ["Forest","forest trees","linear-gradient(135deg,#2e7d32,#0d3010)"],
+];
+
+async function viewHome(){
+  main.innerHTML = `<h2>Featured</h2><div id="hero" class="grid"></div>
+    <h3>Browse by category</h3><div class="tiles" id="tiles"></div>`;
+  const tiles=document.getElementById("tiles");
+  CATEGORIES.forEach(([name,q,bg])=>{ const t=document.createElement("div"); t.className="tile"; t.style.background=bg; t.textContent=name;
+    t.onclick=()=>{ go("explore"); setTimeout(()=>runExplore(q),50); }; tiles.appendChild(t); });
+  try{ const r=await whSearch({q:"nature landscape", sorting:"toplist"});
+    const hero=document.getElementById("hero"); (r.data||[]).slice(0,8).forEach(p=>hero.appendChild(whCard(p)));
+  }catch(e){ document.getElementById("hero").innerHTML=`<p class="empty">Couldn't reach Wallhaven. Check your connection.</p>`; }
+}
+
+let exPage=1, exQuery="", exLoading=false, exDone=false;
+function viewExplore(){
+  main.innerHTML = `<div class="row"><div class="search"><span>🔍</span>
+      <input id="q" type="text" placeholder="Search wallpapers…"></div>
+      <button class="primary" id="goSearch">Search</button></div>
+    <div class="grid" id="exGrid"></div><div id="exSpin"></div>`;
+  const q=document.getElementById("q"); q.value=exQuery;
+  document.getElementById("goSearch").onclick=()=>runExplore(q.value);
+  q.onkeydown=(e)=>{ if(e.key==="Enter") runExplore(q.value); };
+  main.onscroll=null;
+  main.addEventListener("scroll", onExScroll);
+  if(!document.getElementById("exGrid").children.length) runExplore(exQuery);
+}
+function onExScroll(){ if(main.scrollTop+main.clientHeight > main.scrollHeight-600) loadMoreExplore(); }
+async function runExplore(q){ exQuery=q||""; exPage=1; exDone=false; const g=document.getElementById("exGrid"); if(g) g.innerHTML=""; await loadMoreExplore(); }
+async function loadMoreExplore(){
+  if(exLoading||exDone) return; exLoading=true;
+  const spin=document.getElementById("exSpin"); if(spin) spin.innerHTML='<div class="spin"></div>';
+  try{ const r=await whSearch({q:exQuery, page:exPage, sorting: exQuery?"relevance":"toplist"});
+    const g=document.getElementById("exGrid"); (r.data||[]).forEach(p=>g.appendChild(whCard(p)));
+    if(r.meta && exPage>=r.meta.last_page) exDone=true; exPage++;
+  }catch(e){ toast("Search failed"); }
+  finally{ exLoading=false; const s=document.getElementById("exSpin"); if(s) s.innerHTML=""; }
+}
+
+// ---------- Library ----------
+function imgPath(p){ return toFileSrc(p); }
+async function viewLibrary(){
+  main.onscroll=null;
+  main.innerHTML = `<div class="row">
+      <button class="primary" id="pick">📁 Choose Folder</button>
+      <button class="ghost" id="shuffle">🔀 Shuffle now</button>
+      <span class="spacer"></span>
+    </div>
+    <h3>Auto-rotate (while app is open)</h3>
+    <div class="setting"><label>Rotate every</label>
+      <select id="rot">
+        <option value="0">Off</option><option value="15">15 minutes</option>
+        <option value="60">1 hour</option><option value="360">6 hours</option><option value="1440">1 day</option>
+      </select></div>
+    <div class="setting"><label>Favorites only</label><input type="checkbox" id="favOnly"></div>
+    <h3 id="libHead">Photos</h3>
+    <div class="grid" id="libGrid"></div>`;
+  document.getElementById("rot").value=String(settings.rotateMins||0);
+  document.getElementById("favOnly").checked=!!settings.favoritesOnly;
+  document.getElementById("rot").onchange=(e)=>{ settings.rotateMins=+e.target.value; save("settings.json",settings); startRotation(); };
+  document.getElementById("favOnly").onchange=(e)=>{ settings.favoritesOnly=e.target.checked; save("settings.json",settings); };
+  document.getElementById("pick").onclick=pickFolder;
+  document.getElementById("shuffle").onclick=shuffleNow;
+  renderLibrary();
+}
+async function pickFolder(){
+  try{ const sel=await invoke("plugin:dialog|open",{ options:{ directory:true, multiple:false } });
+    if(sel){ libraryFolder=sel; await save("folder.json",{path:sel}); renderLibrary(); }
+  }catch(e){ toast("Couldn't open folder picker"); }
+}
+async function libraryImages(){
+  if(!libraryFolder) return [];
+  try{ return await invoke("list_images",{dir:libraryFolder}); }catch(e){ return []; }
+}
+async function renderLibrary(){
+  const grid=document.getElementById("libGrid"); if(!grid) return;
+  const imgs = await libraryImages();
+  if(!libraryFolder){ grid.innerHTML=`<p class="empty">Choose a folder of images to build your library.</p>`; return; }
+  if(!imgs.length){ grid.innerHTML=`<p class="empty">No images found in that folder.</p>`; return; }
+  grid.innerHTML="";
+  imgs.forEach(path=>{
+    const c=document.createElement("div"); c.className="card";
+    const on = favorites.includes(path);
+    c.innerHTML=`<img loading="lazy" src="${imgPath(path)}">
+      <button class="fav ${on?'on':''}">♥</button>
+      <div class="actions"><button class="primary">Set as Wallpaper</button></div>`;
+    c.querySelector(".primary").onclick=async(e)=>{ e.stopPropagation();
+      try{ await invoke("set_wallpaper_path",{path}); toast("Wallpaper set ✓"); }catch(err){ toast("Failed"); } };
+    const fav=c.querySelector(".fav");
+    fav.onclick=(e)=>{ e.stopPropagation();
+      if(favorites.includes(path)) favorites=favorites.filter(x=>x!==path); else favorites.push(path);
+      fav.classList.toggle("on"); save("favorites.json",favorites); };
+    grid.appendChild(c);
+  });
+}
+async function shuffleNow(){
+  let pool = settings.favoritesOnly ? favorites : await libraryImages();
+  if(!pool.length){ toast(settings.favoritesOnly?"No favorites yet":"No images — choose a folder"); return; }
+  const path = pool[Math.floor(Math.random()*pool.length)];
+  try{ await invoke("set_wallpaper_path",{path}); toast("Shuffled ✓"); }catch(e){ toast("Failed"); }
+}
+let rotTimer=null;
+function startRotation(){ if(rotTimer) clearInterval(rotTimer); rotTimer=null;
+  const m=settings.rotateMins||0; if(m>0) rotTimer=setInterval(shuffleNow, m*60*1000); }
+
+// ---------- Generate (gradients) ----------
+const GRADIENTS = [
+  ["Dusk", ["#4f46e5","#7c3aed","#db2777"], 135],
+  ["Ocean", ["#14b8a6","#2563eb","#3730a3"], 115],
+  ["Sunrise", ["#fb923c","#ec4899","#7c3aed"], 90],
+  ["Forest", ["#22c55e","#14b8a6","#04130a"], 160],
+  ["Graphite", ["#6b7280","#0b0b0d"], 135],
+  ["Candy", ["#ec4899","#a855f7","#3b82f6"], 45],
+];
+function drawGradient(ctx,w,h,colors,angleDeg){
+  const a=angleDeg*Math.PI/180, cx=w/2, cy=h/2, len=Math.abs(Math.cos(a))*w/2+Math.abs(Math.sin(a))*h/2;
+  const g=ctx.createLinearGradient(cx-Math.cos(a)*len, cy-Math.sin(a)*len, cx+Math.cos(a)*len, cy+Math.sin(a)*len);
+  colors.forEach((c,i)=>g.addColorStop(i/(colors.length-1), c));
+  ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+}
+function viewGenerate(){
+  main.onscroll=null;
+  main.innerHTML=`<h2>Generate a gradient wallpaper</h2><div class="grid" id="grads"></div>`;
+  const wrap=document.getElementById("grads");
+  GRADIENTS.forEach(([name,colors,angle])=>{
+    const d=document.createElement("div"); d.className="gradcard";
+    const cv=document.createElement("canvas"); cv.width=320; cv.height=180; cv.style.width="100%"; cv.style.height="100%";
+    drawGradient(cv.getContext("2d"),320,180,colors,angle);
+    d.appendChild(cv); const s=document.createElement("span"); s.textContent=name; d.appendChild(s);
+    d.onclick=()=>applyGradient(name,colors,angle);
+    wrap.appendChild(d);
+  });
+}
+async function applyGradient(name,colors,angle){
+  const w=2560,h=1440; const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+  drawGradient(cv.getContext("2d"),w,h,colors,angle);
+  const b64=cv.toDataURL("image/png");
+  try{ const path=await invoke("save_b64",{subdir:"generated", name:`gradient-${name}.png`, b64});
+    await invoke("set_wallpaper_path",{path}); toast(`Set “${name}” as wallpaper ✓`); }
+  catch(e){ toast("Failed: "+e); }
+}
+
+// ---------- Minecraft ----------
+function viewMinecraft(){ window.location.href="minecraft.html"; }
+
+// ---------- Settings ----------
+function openSettings(){
+  main.onscroll=null;
+  main.innerHTML=`<h2>Settings</h2>
+    <h3>Wallhaven</h3>
+    <div class="setting"><label>API key (optional — higher rate limits)</label>
+      <input type="text" id="apiKey" style="width:240px" placeholder="paste key"></div>
+    <p class="empty" style="text-align:left;padding:0 0 10px">Get a free key at wallhaven.cc → Settings → Account.</p>
+    <h3>Credits</h3>
+    <p class="empty" style="text-align:left">Wallpapers: Wallhaven · Minecraft skins: Minotar / mc-heads / Starlight Skins · Minecraft assets: Mojang.</p>`;
+  const k=document.getElementById("apiKey"); k.value=settings.apiKey||"";
+  k.onchange=()=>{ settings.apiKey=k.value.trim(); save("settings.json",settings); };
+}
+
+// ---------- nav ----------
+const VIEWS={ home:viewHome, explore:viewExplore, library:viewLibrary, generate:viewGenerate, minecraft:viewMinecraft };
+function go(tab){
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active", b.dataset.tab===tab));
+  (VIEWS[tab]||viewHome)();
+}
+document.querySelectorAll("#nav button").forEach(b=> b.onclick=()=>go(b.dataset.tab));
+document.getElementById("settingsBtn").onclick=openSettings;
+
+// ---------- boot ----------
+(async function boot(){
+  settings = await load("settings.json", settings);
+  favorites = await load("favorites.json", []);
+  const f = await load("folder.json", null); if(f && f.path) libraryFolder=f.path;
+  startRotation();
+  go("home");
+})();
+</script>
+</body>
+</html>
