@@ -2,7 +2,7 @@ import SceneKit
 import AppKit
 
 enum HeldItem: String, CaseIterable, Identifiable {
-    case none = "None", sword = "Sword"
+    case none = "None", sword = "Sword", trident = "Trident"
     var id: String { rawValue }
 }
 
@@ -281,6 +281,15 @@ actor TextureService {
 
     func sword(_ armor: Armor) async -> CGImage? { await tex("item/\(armor.swordTier)_sword") }
 
+    /// Texture for whatever the character is holding (sword tier follows the armor; trident is fixed).
+    func held(_ item: HeldItem, _ armor: Armor) async -> CGImage? {
+        switch item {
+        case .none: nil
+        case .sword: await tex("item/\(armor.swordTier)_sword")
+        case .trident: await tex("item/trident")
+        }
+    }
+
     /// Official smithing-template item icon for a trim pattern.
     func trimTemplate(_ pattern: TrimPattern) async -> CGImage? {
         guard pattern != .none else { return nil }
@@ -550,12 +559,26 @@ enum MinecraftModel {
         }
 
         // Held item attaches to the right hand (child of the arm, so it moves with it).
-        if e.item == .sword, let swordTexture = e.swordTexture {
-            // Real Minecraft sword extruded pixel-by-pixel into a true 3D item.
-            let node = swordModel(from: swordTexture, enchanted: e.enchanted)
-            // Sideways, blade up-and-forward, handle in the fist.
-            node.position = SCNVector3(0, -0.5, 6)
-            node.eulerAngles = SCNVector3(0, -Float.pi / 2, 0)
+        // Sword: extruded from its flat item texture. Trident: a real 3D model
+        // (the flat trident icon is only the dropped-item look, not how it's held).
+        switch e.item {
+        case .none: break
+        case .sword:
+            if let heldTexture = e.swordTexture {
+                let node = itemModel(from: heldTexture, enchanted: e.enchanted)
+                node.position = SCNVector3(0, -0.5, 6)
+                node.eulerAngles = SCNVector3(0, -Float.pi / 2, 0)
+                rightArm.addChildNode(node)
+            }
+        case .trident:
+            let node = tridentModel(enchanted: e.enchanted)
+            node.position = SCNVector3(0, -2.5, 2)          // grip at the hand, set back a bit
+            // Drowned-style hold: trident presented forward (+Z, the way the body
+            // faces, like the held sword) and angled up ~30°. Pointing forward rather
+            // than out to the side keeps it full-length at the rotated angles the
+            // wallpaper shows characters at, instead of foreshortening to a stub.
+            // (Lower the pitch toward Float.pi/2 for horizontal, raise it for more lift.)
+            node.eulerAngles = SCNVector3(Float.pi / 2 - Float.pi / 6, 0, 0)
             rightArm.addChildNode(node)
         }
 
@@ -669,8 +692,8 @@ enum MinecraftModel {
         parent.addChildNode(node)
     }
 
-    /// Extrudes a 16×16 item texture into a real 3D pixel model (like Minecraft held items).
-    private static func swordModel(from cg: CGImage, enchanted: Bool) -> SCNNode {
+    /// Extrudes an item texture (16×16 sword, 32×32 trident, …) into a real 3D pixel model.
+    private static func itemModel(from cg: CGImage, enchanted: Bool) -> SCNNode {
         let w = cg.width, h = cg.height
         var data = [UInt8](repeating: 0, count: w * h * 4)
         let cs = CGColorSpaceCreateDeviceRGB()
@@ -680,7 +703,9 @@ enum MinecraftModel {
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return parent }
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
 
-        let px: CGFloat = 0.9, depth: CGFloat = 1.4
+        // Size each texel so the item is a consistent height regardless of texture size
+        // (sword 16px → 0.9, trident 32px → 0.45), keeping the sword identical to before.
+        let px: CGFloat = 14.4 / CGFloat(h), depth: CGFloat = px * 1.55
         for y in 0..<h {
             for x in 0..<w {
                 let i = (y * w + x) * 4
@@ -705,6 +730,112 @@ enum MinecraftModel {
     }
 
     // MARK: - Held items (stylized primitives)
+
+    /// Real trident model (USDZ, CC-BY BoBkiNN_), loaded once and reused.
+    private static let tridentScene: SCNScene? = {
+        guard let url = Bundle.main.url(forResource: "Minecraft_trident", withExtension: "usdz") else { return nil }
+        return try? SCNScene(url: url, options: nil)
+    }()
+
+    /// Faint violet enchant sheen on every material in a subtree (copies materials first).
+    private static func applyGlint(_ node: SCNNode) {
+        node.enumerateHierarchy { n, _ in
+            guard let g = n.geometry else { return }
+            g.materials = g.materials.map { mat in
+                let c = mat.copy() as! SCNMaterial
+                c.emission.contents = NSColor(red: 0.64, green: 0.21, blue: 0.93, alpha: 1)
+                c.emission.intensity = 0.06
+                return c
+            }
+        }
+    }
+
+    /// The real USDZ trident, normalized to the character's scale (falls back to boxes).
+    /// Recursive world-space bounding box (flattenedClone().boundingBox is unreliable for USDZ).
+    private static func worldBounds(_ root: SCNNode) -> (SCNVector3, SCNVector3) {
+        var lo = SCNVector3(1e9, 1e9, 1e9), hi = SCNVector3(-1e9, -1e9, -1e9)
+        root.enumerateHierarchy { n, _ in
+            guard let g = n.geometry else { return }
+            let (a, b) = g.boundingBox
+            let corners = [SCNVector3(a.x,a.y,a.z),SCNVector3(b.x,a.y,a.z),SCNVector3(a.x,b.y,a.z),SCNVector3(b.x,b.y,a.z),
+                           SCNVector3(a.x,a.y,b.z),SCNVector3(b.x,a.y,b.z),SCNVector3(a.x,b.y,b.z),SCNVector3(b.x,b.y,b.z)]
+            for c in corners {
+                let w = n.convertPosition(c, to: root)
+                lo = SCNVector3(min(lo.x,w.x), min(lo.y,w.y), min(lo.z,w.z))
+                hi = SCNVector3(max(hi.x,w.x), max(hi.y,w.y), max(hi.z,w.z))
+            }
+        }
+        return (lo, hi)
+    }
+
+    private static func tridentModel(enchanted: Bool) -> SCNNode {
+        guard let scene = tridentScene else { return tridentBoxModel(enchanted: enchanted) }
+        let model = scene.rootNode.clone()
+        // The USDZ's physically-based material gives the trident a glassy, semi-transparent
+        // sheen. Keep its texture but render it flat/unlit (constant) and fully opaque so
+        // the real prismarine texture shows as a solid item, not glass.
+        model.enumerateHierarchy { n, _ in
+            guard let g = n.geometry else { return }
+            g.materials = g.materials.map { mat in
+                let c = mat.copy() as! SCNMaterial
+                c.lightingModel = .constant
+                c.transparency = 1
+                c.transparencyMode = .default
+                c.blendMode = .replace
+                c.writesToDepthBuffer = true
+                c.isDoubleSided = true
+                c.diffuse.magnificationFilter = .nearest
+                c.diffuse.minificationFilter = .nearest
+                return c
+            }
+        }
+        let (lo, hi) = worldBounds(model)
+        let maxAxis = max(hi.x - lo.x, max(hi.y - lo.y, hi.z - lo.z))
+        let s = 22.0 / max(CGFloat(maxAxis), 0.001)
+        // This model is built upside-down for holding: the three prongs sit at the
+        // -Y (bottom) end and the plain handle runs up to +Y. Grip the SHAFT (30%
+        // down from the butt end) and flip 180° about X so the prongs end up pointing
+        // along +Y, the way a held trident should look. Verified pose via offscreen render.
+        let gripY = hi.y - 0.45 * (hi.y - lo.y)
+        model.position = SCNVector3(-(lo.x + hi.x) / 2, -gripY, -(lo.z + hi.z) / 2)
+        let flip = SCNNode()
+        flip.eulerAngles = SCNVector3(Float.pi, 0, 0)   // prongs -Y → +Y, grip stays at origin
+        flip.addChildNode(model)
+        // Roll 90° about the shaft so the three prongs fan out in the plane that faces
+        // the camera when the character is shown in profile — otherwise the fan is
+        // edge-on and the head reads as a flat paddle instead of a trident.
+        let roll = SCNNode()
+        roll.eulerAngles = SCNVector3(0, Float.pi / 2, 0)
+        roll.addChildNode(flip)
+        let wrap = SCNNode()
+        wrap.addChildNode(roll)
+        wrap.scale = SCNVector3(s, s, s)
+        if enchanted { applyGlint(wrap) }
+        return wrap
+    }
+
+    /// A held trident built from boxes (shaft + crossbar + three prongs), prismarine-toned.
+    private static func tridentBoxModel(enchanted: Bool) -> SCNNode {
+        let parent = SCNNode()
+        let shaftC = NSColor(srgbRed: 0.34, green: 0.50, blue: 0.49, alpha: 1)
+        let prongC = NSColor(srgbRed: 0.52, green: 0.82, blue: 0.80, alpha: 1)
+        func bar(_ w: CGFloat, _ h: CGFloat, _ d: CGFloat, _ pos: SCNVector3, _ color: NSColor) {
+            let b = SCNBox(width: w, height: h, length: d, chamferRadius: 0)
+            let m = SCNMaterial(); m.diffuse.contents = color; m.lightingModel = .blinn
+            if enchanted {
+                m.emission.contents = NSColor(red: 0.64, green: 0.21, blue: 0.93, alpha: 1)
+                m.emission.intensity = 0.06
+            }
+            b.firstMaterial = m
+            let n = SCNNode(geometry: b); n.position = pos; parent.addChildNode(n)
+        }
+        bar(0.9, 18, 0.9, SCNVector3(0, -2, 0), shaftC)        // shaft
+        bar(5.2, 1.0, 0.9, SCNVector3(0, 7.2, 0), prongC)      // crossbar (head base)
+        bar(0.9, 3.6, 0.9, SCNVector3(0, 9.4, 0), prongC)      // centre prong
+        bar(0.9, 2.8, 0.9, SCNVector3(-2.1, 9.0, 0), prongC)   // left prong
+        bar(0.9, 2.8, 0.9, SCNVector3(2.1, 9.0, 0), prongC)    // right prong
+        return parent.flattenedClone()
+    }
 
     // MARK: - Biome backdrop
 

@@ -20,3 +20,6 @@ xcuserdata/
 *.perspectivev3
 !default.perspectivev3
 .firebase/
+
+# Node / Tauri desktop
+node_modules/
