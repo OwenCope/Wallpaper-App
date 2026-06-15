@@ -96,6 +96,16 @@
     </select>
   </div>
 
+  <div class="row">
+    <span class="chip" style="background:linear-gradient(135deg,#f59e0b,#b45309)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M14 6h4v4"/></svg></span>
+    <span class="lbl">Held item</span>
+    <select id="held">
+      <option value="none" selected>None</option>
+      <option value="sword">Sword</option>
+      <option value="trident">Trident</option>
+    </select>
+  </div>
+
   <div id="trimwrap" class="field">
     <div class="row">
       <span class="chip" style="background:linear-gradient(135deg,#a855f7,#6b21a8)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M9.5 14.5a4 4 0 005.7 0l2.3-2.3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14.5 9.5a4 4 0 00-5.7 0l-2.3 2.3a4 4 0 005.7 5.7l1-1"/></svg></span>
@@ -114,6 +124,11 @@
 
   <button class="primary" id="download">Download image</button>
   <div class="hint">Drag to rotate · scroll to zoom</div>
+  <div class="hint" style="margin-top:14px; line-height:1.5; color:#62626b;">
+    Trident model “<a href="https://skfb.ly/oPTHs" target="_blank" rel="noopener" style="color:#8a8a93;">Minecraft trident</a>” by BoBkiNN_,
+    licensed <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener" style="color:#8a8a93;">CC BY 4.0</a>.
+    Skins via Minotar · armor/trim textures © Mojang. Not affiliated with Mojang.
+  </div>
 </aside>
 
 <div id="modal"><div class="sheet"><h4 id="sheetTitle"></h4><div class="grid" id="sheetGrid"></div></div></div>
@@ -127,6 +142,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const MC="https://raw.githubusercontent.com/misode/mcmeta/assets/assets/minecraft/textures";
 const PATTERNS=["coast","sentry","dune","wild","ward","eye","vex","tide","snout","rib","spire","wayfinder","shaper","silence","raiser","host","flow","bolt"];
@@ -138,7 +154,7 @@ const PIECES=[["helmet","Helmet"],["chest","Chestplate"],["leggings","Leggings"]
 const PIECE_ITEM={helmet:"helmet",chest:"chestplate",leggings:"leggings",boots:"boots"};
 
 // state
-const S={ skin:null, armor:"netherite", matchAll:true,
+const S={ skin:null, armor:"netherite", matchAll:true, glint:false, heldItem:"none",
   all:{pattern:"none",material:"diamond"},
   pieces:{helmet:{pattern:"none",material:"diamond"},chest:{pattern:"none",material:"diamond"},leggings:{pattern:"none",material:"diamond"},boots:{pattern:"none",material:"diamond"}} };
 
@@ -170,7 +186,7 @@ addEventListener("resize",resize); resize();
 let group=null;
 
 function part(g,w,h,d,r,r2,pos){const b=buildBox(w,h,d,r,S.skin);b.position.set(...pos);g.add(b);if(r2){const o=buildBox(w+.5,h+.5,d+.5,r2,S.skin,true);o.position.set(...pos);g.add(o);}}
-function armorBox(g,w,h,d,inf,wInf,r,cv,pos,mirror,tn){if(!cv)return;const m=buildBox(w+(wInf??inf),h+inf,d+inf,r,tn?tint(cv,tn):cv,true);m.position.set(...pos);if(mirror)m.scale.x=-1;g.add(m);}
+function armorBox(g,w,h,d,inf,wInf,r,cv,pos,mirror,tn){if(!cv)return;const m=buildBox(w+(wInf??inf),h+inf,d+inf,r,tn?tint(cv,tn):cv,true);m.position.set(...pos);if(mirror)m.scale.x=-1;if(S.glint)m.material.color.setHex(0xf1ecff);g.add(m);}
 
 function pieceTrim(p){return S.matchAll?S.all:S.pieces[p];}
 
@@ -208,7 +224,72 @@ async function rebuild(){
     if(chestT){armorBox(g,8,12,4,0.57,0.18,Rarm.body,chestT,[0,0,0],false);armorBox(g,4,12,4,0.56,0.12,Rarm.arm,chestT,[-6,0,0],false);armorBox(g,4,12,4,0.56,0.12,Rarm.arm,chestT,[6,0,0],true);}
     if(bootT){armorBox(g,4,12,4,0.57,0.12,Rarm.leg,bootT,[-2,-12,0],true);armorBox(g,4,12,4,0.57,0.12,Rarm.leg,bootT,[2,-12,0],false);}
   }
+  await addHeld(g);
   scene.add(g);
+}
+
+// Held item: sword extruded from its icon; trident built from boxes (icon is only the dropped look).
+const SWORD_TIER={none:"iron",iron:"iron",leather:"wooden",chainmail:"stone",gold:"golden",diamond:"diamond",netherite:"netherite"};
+function glintCol(c){ return S.glint ? c.clone().multiply(new THREE.Color(0xf1ecff)) : c; }
+async function addHeld(g){
+  if(S.heldItem==="none") return;
+  if(S.heldItem==="trident"){ const t=await tridentMesh(); if(t) g.add(t); return; }
+  const cv=await tex(`item/${SWORD_TIER[S.armor]}_sword`); if(!cv) return;
+  g.add(extrudeIcon(cv));
+}
+function extrudeIcon(cv){
+  const w=cv.width,h=cv.height; const d=cv.getContext("2d").getImageData(0,0,w,h).data;
+  const px=14.4/h, depth=px*1.55; const grp=new THREE.Group();
+  const geo=new THREE.BoxGeometry(px,px,depth);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){ const i=(y*w+x)*4; if(d[i+3]<=20) continue;
+    const col=glintCol(new THREE.Color(d[i]/255,d[i+1]/255,d[i+2]/255));
+    const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:col}));
+    m.position.set((x-w/2+0.5)*px,(h-1-y-h/2+0.5)*px,0); grp.add(m);
+  }
+  grp.position.set(-7,-1,4); grp.rotation.z=-0.4;   // held in the right hand
+  return grp;
+}
+// Real Minecraft trident, loaded from the self-contained glTF model.
+const tridentPromise = new Promise(res=>{
+  new GLTFLoader().load("trident.gltf", g=>res(g.scene), undefined, ()=>res(null));
+});
+async function tridentMesh(){
+  const proto = await tridentPromise; if(!proto) return null;
+  const model = proto.clone(true);
+  // GLTFLoader makes lit StandardMaterials → black in our unlit scene. Swap to Basic.
+  // GLTFLoader makes lit StandardMaterials that look glassy/semi-transparent in our
+  // unlit scene. Keep the texture but swap to a flat, fully opaque Basic material so the
+  // real prismarine texture shows as a solid item.
+  model.traverse(o=>{ if(o.isMesh){
+    const map = o.material && o.material.map || null;
+    if(map){ map.magFilter=THREE.NearestFilter; map.minFilter=THREE.NearestFilter; map.generateMipmaps=false; map.needsUpdate=true; }
+    const nm = new THREE.MeshBasicMaterial({ map, color: map ? 0xffffff : 0x9fb0ad, transparent:false, alphaTest:0.5, side:THREE.DoubleSide });
+    if(S.glint) nm.color.multiply(new THREE.Color(0xf1ecff));
+    o.material = nm;
+  }});
+  // Stand the longest axis up (Y), then scale to ~22 tall and centre.
+  let b=new THREE.Box3().setFromObject(model), sz=new THREE.Vector3(); b.getSize(sz);
+  if(sz.z>=sz.x && sz.z>=sz.y) model.rotation.x=-Math.PI/2;
+  else if(sz.x>=sz.y && sz.x>=sz.z) model.rotation.z=Math.PI/2;
+  model.updateMatrixWorld(true);
+  b=new THREE.Box3().setFromObject(model); b.getSize(sz);
+  model.scale.setScalar(22/Math.max(sz.x,sz.y,sz.z));
+  model.updateMatrixWorld(true);
+  b=new THREE.Box3().setFromObject(model); const c=new THREE.Vector3(); b.getCenter(c);
+  // The model is built upside-down for holding: the prongs sit at the -Y end and the
+  // plain handle runs up to +Y. Grip the shaft (45% down from the butt) at the origin,
+  // flip 180° about X so the prongs point +Y, and roll 90° about the shaft so the prong
+  // fan faces the camera in profile (otherwise it's edge-on and reads as a flat paddle).
+  const gripY = b.max.y - 0.45*(b.max.y-b.min.y);
+  model.position.set(-c.x, -gripY, -c.z);
+  const flip=new THREE.Group(); flip.rotation.x=Math.PI; flip.add(model);
+  const roll=new THREE.Group(); roll.rotation.y=Math.PI/2; roll.add(flip);
+  const grp=new THREE.Group(); grp.add(roll);
+  // Drowned-style hold: presented forward (+Z, the way the body faces) and angled up
+  // ~30°, grip at the right hand. Forward rather than sideways keeps it full-length at
+  // rotated viewing angles instead of foreshortening to a stub.
+  grp.position.set(-6,-2.5,2); grp.rotation.x=Math.PI/2 - Math.PI/6;
+  return grp;
 }
 
 // ---- UI: recipe rows ----
@@ -266,8 +347,53 @@ document.getElementById("load").onclick=load;
 document.getElementById("username").addEventListener("keydown",e=>{if(e.key==="Enter")load();});
 document.getElementById("armor").onchange=e=>{S.armor=e.target.value;trimCard();rebuild();};
 document.getElementById("matchall").onchange=e=>{S.matchAll=e.target.checked;trimCard();rebuild();};
+document.getElementById("glint").onchange=e=>{S.glint=e.target.checked;rebuild();};
+document.getElementById("held").onchange=e=>{S.heldItem=e.target.value;rebuild();};
 document.getElementById("download").onclick=()=>{const a=document.createElement("a");a.download="minecraft-character.png";a.href=renderer.domElement.toDataURL("image/png");a.click();};
 trimCard(); load();
+</script>
+
+<!-- Desktop (Tauri) update check: only runs inside the installed app, never on the website. -->
+<script>
+// Bump APP_VERSION to match each desktop release tag (desktop-v<APP_VERSION>).
+const APP_VERSION = "1.1.0";
+const GH_REPO = "OwenCope/wallpaper-app";
+function verGt(a, b){
+  const pa = a.split(".").map(n=>parseInt(n,10)||0), pb = b.split(".").map(n=>parseInt(n,10)||0);
+  for(let i=0;i<Math.max(pa.length,pb.length);i++){ const d=(pa[i]||0)-(pb[i]||0); if(d) return d>0; }
+  return false;
+}
+async function checkForUpdate(){
+  if(!window.__TAURI__) return;            // installed desktop app only
+  try{
+    const r = await fetch(`https://api.github.com/repos/${GH_REPO}/releases?per_page=15`, {headers:{Accept:"application/vnd.github+json"}});
+    if(!r.ok) return;
+    const rels = await r.json();
+    // Only consider the desktop channel so the official macOS releases are ignored.
+    const desk = rels.filter(x=>typeof x.tag_name==="string" && x.tag_name.startsWith("desktop-v"));
+    if(!desk.length) return;
+    const latest = desk[0];
+    const latestVer = latest.tag_name.replace(/^desktop-v/,"");
+    if(!verGt(latestVer, APP_VERSION)) return;
+    showUpdateBanner(latestVer, latest.html_url);
+  }catch(e){ /* offline or rate-limited: silently skip */ }
+}
+function showUpdateBanner(ver, url){
+  const bar = document.createElement("div");
+  bar.style.cssText = "position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;display:flex;gap:12px;align-items:center;padding:10px 14px;border-radius:14px;background:rgba(24,24,29,.92);border:1px solid rgba(255,255,255,.12);box-shadow:0 18px 50px rgba(0,0,0,.5);font:14px -apple-system,Segoe UI,sans-serif;color:#f2f2f5;backdrop-filter:blur(20px)";
+  bar.innerHTML = `<span>Update available — <b>${ver}</b></span>`;
+  const dl = document.createElement("button");
+  dl.textContent = "Download";
+  dl.style.cssText = "background:var(--accent);color:#fff;border:none;border-radius:9px;padding:7px 14px;cursor:pointer;font-weight:600";
+  dl.onclick = ()=>{ try{ window.__TAURI__.core.invoke("plugin:opener|open_url", { url }); }catch(e){} };
+  const x = document.createElement("button");
+  x.textContent = "Later";
+  x.style.cssText = "background:none;color:#9a9aa3;border:none;cursor:pointer";
+  x.onclick = ()=> bar.remove();
+  bar.append(dl, x);
+  document.body.appendChild(bar);
+}
+checkForUpdate();
 </script>
 </body>
 </html>

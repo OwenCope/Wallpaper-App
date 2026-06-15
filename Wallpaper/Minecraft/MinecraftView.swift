@@ -665,10 +665,8 @@ struct MinecraftView: View {
             Text("Editing \(name)").font(.caption.weight(.semibold)).foregroundStyle(.tint)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        settingRow("Hold sword", icon: "figure.fencing", tint: .orange) {
-            Toggle("", isOn: Binding(get: { l.item == .sword },
-                                     set: { lo.wrappedValue.item = $0 ? .sword : .none }))
-                .labelsHidden().toggleStyle(.switch).controlSize(.small)
+        settingRow("Held item", icon: "figure.fencing", tint: .orange) {
+            menu(lo.item, HeldItem.allCases) { $0.rawValue }
         }
         settingRow("Armor", icon: "shield.fill", tint: .blue) { menu(lo.armor, Armor.allCases) { $0.rawValue } }
         if l.armor != .none {
@@ -748,7 +746,7 @@ struct MinecraftView: View {
         for p in players {
             let lo = p.loadout
             let (l1, l2) = await TextureService.shared.armor(lo.armor)
-            let sword = lo.item == .sword ? await TextureService.shared.sword(lo.armor) : nil
+            let sword = await TextureService.shared.held(lo.item, lo.armor)
             var helmetT: CGImage?, chestT: CGImage?, leggingsT: CGImage?, bootsT: CGImage?
             if lo.armor != .none {
                 let h = pieceTrim(lo, .helmet), c = pieceTrim(lo, .chest)
@@ -1026,8 +1024,9 @@ struct MinecraftTrimsView: View {
                             ForEach(Armor.allCases) { Text($0.rawValue).tag($0) }
                         }.labelsHidden().fixedSize()
                         Spacer()
-                        Toggle("Sword", isOn: Binding(get: { lo.wrappedValue.item == .sword },
-                                                      set: { lo.wrappedValue.item = $0 ? .sword : .none }))
+                        Picker("", selection: lo.item) {
+                            ForEach(HeldItem.allCases) { Text($0.rawValue).tag($0) }
+                        }.labelsHidden().fixedSize()
                         Toggle("Glint", isOn: lo.enchanted)
                     }
                     if lo.wrappedValue.armor == .none {
