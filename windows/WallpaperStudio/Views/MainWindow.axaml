@@ -62,15 +62,7 @@
             </Grid>
         </Border>
 
-        <!-- Content area (real section views land here as we port them) -->
-        <Border Padding="32">
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
-                <TextBlock Text="{Binding SelectedTab}" Foreground="{StaticResource Ink}"
-                           FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                <TextBlock Text="Native Windows rebuild in progress — this section is being ported from the macOS app."
-                           Foreground="{StaticResource Muted}" FontSize="14" MaxWidth="440"
-                           TextWrapping="Wrap" TextAlignment="Center"/>
-            </StackPanel>
-        </Border>
+        <!-- Section views render here -->
+        <ContentControl Content="{Binding CurrentPage}"/>
     </DockPanel>
 </Window>

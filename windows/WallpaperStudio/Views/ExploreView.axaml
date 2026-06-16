@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:WallpaperStudio.ViewModels"
+             x:Class="WallpaperStudio.Views.ExploreView"
+             x:DataType="vm:ExploreViewModel">
+  <Border Padding="32">
+    <StackPanel Spacing="6" VerticalAlignment="Top">
+      <TextBlock Text="{Binding Title}" FontSize="26" FontWeight="SemiBold" Foreground="{DynamicResource Ink}"/>
+      <TextBlock Text="Coming next in the native rebuild." Foreground="{DynamicResource Muted}" FontSize="14"/>
+    </StackPanel>
+  </Border>
+</UserControl>
