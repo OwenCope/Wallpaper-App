@@ -4,76 +4,142 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Wallpaper Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root{ color-scheme:dark; --accent:#3b82f6; --card:rgba(255,255,255,.05); --line:rgba(255,255,255,.09); }
+  :root{
+    --bg:#0a0a0f; --panel:rgba(255,255,255,.045); --panel2:rgba(255,255,255,.07);
+    --line:rgba(255,255,255,.08); --ink:#ECECF1; --mut:#8b8b97; --faint:#62626d;
+    --a1:#6366f1; --a2:#a855f7; --spark:#22d3ee;
+    --accent:#7c6cf2;                       /* solid fallback for JS-set borders/spinners */
+    --grad:linear-gradient(120deg,var(--a1),var(--a2));
+  }
   *{ box-sizing:border-box; }
-  html,body{ margin:0; height:100%; font-family:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
-    background:radial-gradient(130% 130% at 50% 0%, #15151c 0%, #050507 70%); color:#f2f2f5; overflow:hidden; }
-  #app{ display:flex; flex-direction:column; height:100%; }
+  html,body{ margin:0; height:100%; color:var(--ink); overflow:hidden;
+    font-family:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+    background:var(--bg); }
+  /* living aurora so the dark never reads flat */
+  body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(60% 50% at 12% -5%, rgba(99,102,241,.22), transparent 60%),
+      radial-gradient(55% 45% at 100% 8%, rgba(168,85,247,.16), transparent 55%),
+      radial-gradient(70% 60% at 50% 120%, rgba(34,211,238,.07), transparent 60%); }
+  #app{ position:relative; z-index:1; display:flex; height:100%; }
 
-  /* Top bar */
-  header{ display:flex; align-items:center; gap:14px; padding:12px 18px; border-bottom:1px solid var(--line); -webkit-app-region:drag; }
-  .brand{ font-weight:700; letter-spacing:.2px; margin-right:6px; }
-  nav{ display:flex; gap:4px; -webkit-app-region:no-drag; }
-  nav button{ background:none; border:none; color:#b9b9c2; font:inherit; font-size:14px; padding:7px 14px; border-radius:10px; cursor:pointer; }
-  nav button.active{ background:var(--card); color:#fff; }
-  nav button:hover:not(.active){ color:#fff; }
+  /* Left rail */
+  .rail{ width:228px; flex:none; display:flex; flex-direction:column; gap:6px; padding:18px 14px;
+    border-right:1px solid var(--line); background:rgba(8,8,12,.4); backdrop-filter:blur(12px); -webkit-app-region:drag; }
+  .brand{ display:flex; align-items:center; gap:11px; padding:8px 10px 16px; }
+  .brand .mark{ width:34px; height:34px; border-radius:11px; background:var(--grad); display:grid; place-items:center;
+    font-size:17px; box-shadow:0 6px 20px rgba(124,108,242,.45); }
+  .brand>span:last-child{ display:flex; flex-direction:column; }
+  .brand .name{ display:block; font-family:"Space Grotesk",sans-serif; font-weight:700; font-size:15.5px; letter-spacing:.2px; line-height:1.15; }
+  .brand .sub{ display:block; font-size:11px; color:var(--faint); margin-top:3px; }
+  nav{ display:flex; flex-direction:column; gap:3px; -webkit-app-region:no-drag; }
+  nav button{ position:relative; display:flex; align-items:center; gap:11px; text-align:left;
+    background:none; border:none; color:var(--mut); font:inherit; font-size:14.5px; font-weight:500;
+    padding:10px 12px; border-radius:11px; cursor:pointer; transition:.15s; }
+  nav button .ic{ font-size:16px; width:20px; text-align:center; filter:grayscale(.3); }
+  nav button:hover:not(.active){ color:var(--ink); background:var(--panel); }
+  nav button.active{ color:#fff; background:var(--panel2); }
+  nav button.active::before{ content:""; position:absolute; left:-14px; top:9px; bottom:9px; width:3px;
+    border-radius:0 3px 3px 0; background:var(--grad); box-shadow:0 0 12px rgba(124,108,242,.8); }
   .spacer{ flex:1; }
-  .iconbtn{ -webkit-app-region:no-drag; background:var(--card); border:1px solid var(--line); color:#cfcfd6; width:34px; height:34px; border-radius:9px; cursor:pointer; font-size:15px; }
+  .iconbtn{ -webkit-app-region:no-drag; display:flex; align-items:center; gap:10px; width:100%;
+    background:none; border:none; color:var(--mut); border-radius:11px; cursor:pointer; font:inherit; font-size:14px; padding:10px 12px; }
+  .iconbtn:hover{ color:var(--ink); background:var(--panel); }
 
-  main{ flex:1; overflow-y:auto; padding:22px; scrollbar-width:thin; }
+  main{ flex:1; overflow-y:auto; padding:30px 34px; scrollbar-width:thin; }
   .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-  h2{ font-size:20px; margin:0 0 14px; }
-  h3{ font-size:14px; color:#a9a9b3; margin:24px 0 10px; text-transform:uppercase; letter-spacing:.6px; }
-  .search{ display:flex; gap:8px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 14px; width:520px; max-width:100%; }
-  .search input{ background:none; border:none; color:#fff; font:inherit; font-size:15px; width:100%; outline:none; }
-  button.primary{ background:var(--accent); color:#fff; border:none; border-radius:10px; padding:9px 16px; font:inherit; font-weight:600; cursor:pointer; }
-  button.ghost{ background:var(--card); border:1px solid var(--line); color:#e7e7ec; border-radius:10px; padding:9px 14px; font:inherit; cursor:pointer; }
-  select,input[type=text]{ background:var(--card); border:1px solid var(--line); color:#fff; border-radius:9px; padding:8px 10px; font:inherit; }
+  h2{ font-family:"Space Grotesk",sans-serif; font-size:27px; font-weight:600; letter-spacing:-.5px; margin:0 0 6px; }
+  h3{ font-size:12px; color:var(--a2); margin:30px 0 12px; text-transform:uppercase; letter-spacing:1.4px; font-weight:600;
+    display:flex; align-items:center; gap:9px; }
+  h3::before{ content:""; width:16px; height:1.5px; background:var(--grad); border-radius:2px; }
 
-  /* Grids */
-  .grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:16px; margin-top:16px; }
-  .card{ position:relative; aspect-ratio:16/9; border-radius:14px; overflow:hidden; background:#1a1a22; border:1px solid var(--line); cursor:pointer; }
-  .card img{ width:100%; height:100%; object-fit:cover; display:block; transition:transform .25s; }
-  .card:hover img{ transform:scale(1.04); }
-  .card .meta{ position:absolute; left:0; right:0; bottom:0; padding:8px 10px; font-size:11px; color:#fff;
-    background:linear-gradient(transparent, rgba(0,0,0,.75)); display:flex; justify-content:space-between; align-items:center; }
-  .card .actions{ position:absolute; inset:0; display:flex; gap:8px; align-items:center; justify-content:center; opacity:0;
-    background:rgba(0,0,0,.45); transition:opacity .2s; }
+  .search{ display:flex; gap:10px; align-items:center; background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:13px 16px; width:560px; max-width:100%; transition:.18s; }
+  .search:focus-within{ border-color:rgba(124,108,242,.7); box-shadow:0 0 0 3px rgba(124,108,242,.18); background:var(--panel2); }
+  .search input{ background:none; border:none; color:#fff; font:inherit; font-size:15px; width:100%; outline:none; }
+  button.primary{ background:var(--grad); color:#fff; border:none; border-radius:11px; padding:11px 18px; font:inherit;
+    font-weight:600; cursor:pointer; box-shadow:0 6px 18px rgba(124,108,242,.35); transition:.15s; }
+  button.primary:hover{ filter:brightness(1.08); transform:translateY(-1px); }
+  button.primary:disabled{ opacity:.6; transform:none; cursor:default; }
+  button.ghost{ background:var(--panel); border:1px solid var(--line); color:var(--ink); border-radius:11px;
+    padding:11px 16px; font:inherit; cursor:pointer; transition:.15s; }
+  button.ghost:hover{ background:var(--panel2); }
+  select,input[type=text]{ background:var(--panel); border:1px solid var(--line); color:#fff; border-radius:10px;
+    padding:9px 11px; font:inherit; outline:none; }
+  select:focus,input[type=text]:focus{ border-color:rgba(124,108,242,.6); }
+
+  /* Grids + cards */
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:18px; margin-top:18px; }
+  .card{ position:relative; aspect-ratio:16/9; border-radius:16px; overflow:hidden; background:#15151d;
+    border:1px solid var(--line); cursor:pointer; transition:transform .22s, box-shadow .22s, border-color .22s; }
+  .card:hover{ transform:translateY(-4px); border-color:rgba(124,108,242,.5);
+    box-shadow:0 16px 36px rgba(0,0,0,.5), 0 0 0 1px rgba(124,108,242,.25); }
+  .card img{ width:100%; height:100%; object-fit:cover; display:block; transition:transform .35s; }
+  .card:hover img{ transform:scale(1.05); }
+  .card .meta{ position:absolute; left:0; right:0; bottom:0; padding:10px 12px; font-size:11.5px; color:#fff; font-weight:500;
+    background:linear-gradient(transparent, rgba(0,0,0,.78)); display:flex; justify-content:space-between; align-items:center;
+    transition:opacity .2s; }
+  .card:hover .meta{ opacity:0; }
+  .card .actions{ position:absolute; inset:0; display:flex; gap:9px; align-items:center; justify-content:center; opacity:0;
+    background:linear-gradient(180deg, rgba(10,10,15,.2), rgba(10,10,15,.7)); transition:opacity .2s; }
   .card:hover .actions{ opacity:1; }
-  .card .actions button{ font-size:12px; padding:7px 11px; }
-  .badge{ position:absolute; top:8px; left:8px; background:rgba(0,0,0,.6); border-radius:6px; padding:2px 7px; font-size:10px; font-weight:700; }
-  .fav{ position:absolute; top:8px; right:8px; background:rgba(0,0,0,.5); border:none; color:#fff; border-radius:50%; width:28px; height:28px; cursor:pointer; }
-  .fav.on{ color:#ff5a7a; }
-  .tiles{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
-  .tile{ aspect-ratio:16/10; border-radius:14px; cursor:pointer; display:flex; align-items:flex-end; padding:12px; font-weight:600; color:#fff; }
-  .empty{ color:#8a8a93; text-align:center; padding:60px 20px; }
-  .toast{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:rgba(20,20,26,.95); border:1px solid var(--line);
-    padding:10px 16px; border-radius:12px; font-size:13px; z-index:50; box-shadow:0 18px 50px rgba(0,0,0,.5); }
-  .gradcard{ aspect-ratio:16/9; border-radius:14px; cursor:pointer; border:1px solid var(--line); position:relative; overflow:hidden; }
-  .gradcard span{ position:absolute; bottom:8px; left:10px; font-weight:600; font-size:13px; text-shadow:0 1px 4px rgba(0,0,0,.6); }
-  .setting{ display:flex; align-items:center; justify-content:space-between; background:var(--card); border:1px solid var(--line);
-    border-radius:12px; padding:12px 14px; margin-bottom:10px; max-width:520px; }
+  .card .actions button{ font-size:12.5px; padding:9px 14px; }
+  .badge{ position:absolute; top:10px; left:10px; background:rgba(10,10,15,.7); backdrop-filter:blur(6px);
+    border:1px solid var(--line); border-radius:7px; padding:3px 8px; font-size:10px; font-weight:700; letter-spacing:.5px; }
+  .fav{ position:absolute; top:9px; right:9px; background:rgba(10,10,15,.55); backdrop-filter:blur(6px); border:1px solid var(--line);
+    color:#fff; border-radius:50%; width:30px; height:30px; cursor:pointer; font-size:14px; transition:.15s; }
+  .fav:hover{ transform:scale(1.12); }
+  .fav.on{ color:#ff5a7a; border-color:rgba(255,90,122,.5); }
+
+  .tiles{ display:grid; grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:14px; }
+  .tile{ aspect-ratio:16/10; border-radius:16px; cursor:pointer; display:flex; align-items:flex-end; padding:14px;
+    font-family:"Space Grotesk",sans-serif; font-weight:600; font-size:15px; color:#fff; position:relative; overflow:hidden;
+    border:1px solid var(--line); box-shadow:inset 0 -40px 50px -30px rgba(0,0,0,.7); transition:transform .2s, box-shadow .2s; }
+  .tile:hover{ transform:translateY(-3px); box-shadow:inset 0 -40px 50px -30px rgba(0,0,0,.7), 0 14px 30px rgba(0,0,0,.45); }
+
+  .empty{ color:var(--mut); text-align:center; padding:72px 20px; font-size:14.5px; line-height:1.6; }
+  .toast{ position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:rgba(18,18,24,.92);
+    backdrop-filter:blur(20px); border:1px solid var(--line); border-left:3px solid #7c6cf2;
+    padding:12px 18px; border-radius:13px; font-size:13.5px; z-index:50; box-shadow:0 18px 50px rgba(0,0,0,.55); animation:rise .25s ease; }
+  @keyframes rise{ from{ opacity:0; transform:translate(-50%,8px); } }
+
+  .gradcard{ aspect-ratio:16/9; border-radius:16px; cursor:pointer; border:1px solid var(--line); position:relative;
+    overflow:hidden; transition:transform .2s, box-shadow .2s; }
+  .gradcard:hover{ transform:translateY(-4px); box-shadow:0 16px 36px rgba(0,0,0,.5); }
+  .gradcard span{ position:absolute; bottom:10px; left:12px; font-family:"Space Grotesk",sans-serif; font-weight:600;
+    font-size:14px; text-shadow:0 1px 6px rgba(0,0,0,.7); }
+
+  .setting{ display:flex; align-items:center; justify-content:space-between; background:var(--panel); border:1px solid var(--line);
+    border-radius:13px; padding:14px 16px; margin-bottom:10px; max-width:560px; font-size:14px; }
   label{ font-size:14px; }
+  input[type=checkbox]{ width:18px; height:18px; accent-color:#7c6cf2; }
   .hide{ display:none !important; }
-  .spin{ width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s 1s linear infinite;margin:40px auto;}
+  .spin{ width:26px;height:26px;border:3px solid var(--line);border-top-color:#7c6cf2;border-radius:50%;animation:s 1s linear infinite;margin:46px auto;}
   @keyframes s{to{transform:rotate(360deg)}}
+  ::-webkit-scrollbar{ width:10px; } ::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.1); border-radius:6px; border:3px solid transparent; background-clip:padding-box; }
 </style>
 </head>
 <body>
 <div id="app">
-  <header>
-    <span class="brand">🖼️ Wallpaper Studio</span>
+  <aside class="rail">
+    <div class="brand">
+      <span class="mark">🖼️</span>
+      <span><span class="name">Wallpaper Studio</span><span class="sub">make your desktop yours</span></span>
+    </div>
     <nav id="nav">
-      <button data-tab="home" class="active">Home</button>
-      <button data-tab="explore">Explore</button>
-      <button data-tab="library">Library</button>
-      <button data-tab="generate">Generate</button>
-      <button data-tab="minecraft">Minecraft</button>
+      <button data-tab="home" class="active"><span class="ic">✦</span>Home</button>
+      <button data-tab="explore"><span class="ic">🔍</span>Explore</button>
+      <button data-tab="library"><span class="ic">🗂️</span>Library</button>
+      <button data-tab="generate"><span class="ic">🎨</span>Generate</button>
+      <button data-tab="minecraft"><span class="ic">⛏️</span>Minecraft</button>
     </nav>
     <span class="spacer"></span>
-    <button class="iconbtn" id="settingsBtn" title="Settings">⚙️</button>
-  </header>
+    <button class="iconbtn" id="settingsBtn" title="Settings"><span class="ic">⚙️</span>Settings</button>
+  </aside>
   <main id="main"></main>
 </div>
 
