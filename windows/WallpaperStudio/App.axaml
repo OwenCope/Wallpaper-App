@@ -1,0 +1,43 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="WallpaperStudio.App"
+             xmlns:local="using:WallpaperStudio"
+             RequestedThemeVariant="Dark">
+
+    <Application.DataTemplates>
+        <local:ViewLocator/>
+    </Application.DataTemplates>
+
+    <Application.Resources>
+        <Color x:Key="Accent">#3B82F6</Color>
+        <SolidColorBrush x:Key="AccentBrush" Color="#3B82F6"/>
+        <SolidColorBrush x:Key="AppBg" Color="#16161A"/>
+        <SolidColorBrush x:Key="PanelBg" Color="#1E1E24"/>
+        <SolidColorBrush x:Key="Hairline" Color="#2C2C34"/>
+        <SolidColorBrush x:Key="Ink" Color="#ECECEF"/>
+        <SolidColorBrush x:Key="Muted" Color="#9A9AA4"/>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+
+        <!-- Segmented top-bar tab button: quiet by default, filled when checked. -->
+        <Style Selector="ToggleButton.tab">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#9A9AA4"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+        </Style>
+        <Style Selector="ToggleButton.tab:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#23232B"/>
+            <Setter Property="TextElement.Foreground" Value="#ECECEF"/>
+        </Style>
+        <Style Selector="ToggleButton.tab:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="#2C2C34"/>
+            <Setter Property="TextElement.Foreground" Value="#FFFFFF"/>
+        </Style>
+    </Application.Styles>
+</Application>

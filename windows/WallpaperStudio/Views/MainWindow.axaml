@@ -1,0 +1,76 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:WallpaperStudio.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1180" d:DesignHeight="760"
+        x:Class="WallpaperStudio.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Width="1180" Height="760" MinWidth="940" MinHeight="620"
+        Background="{StaticResource AppBg}"
+        TransparencyLevelHint="Mica"
+        Title="Wallpaper Studio">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <DockPanel LastChildFill="True">
+        <!-- Top toolbar: title · segmented tabs · settings -->
+        <Border DockPanel.Dock="Top" Height="54" Background="#1A1A20"
+                BorderBrush="{StaticResource Hairline}" BorderThickness="0,0,0,1">
+            <Grid Margin="18,0">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10"
+                            HorizontalAlignment="Left">
+                    <Border Width="26" Height="26" CornerRadius="7" Background="#2A2A31">
+                        <Path Margin="6" Stretch="Uniform" Fill="{StaticResource Ink}"
+                              Data="M3 20 L12 5 L21 20 L14.5 20 L12 16 L9.5 20 Z"/>
+                    </Border>
+                    <TextBlock Text="Wallpaper Studio" Foreground="{StaticResource Ink}"
+                               FontSize="14.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Centered segmented tabs (ListBox = single-select, no converters needed) -->
+                <ListBox ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Background="#202027" Padding="3" CornerRadius="10"
+                         BorderThickness="0">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2"/></ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem">
+                            <Setter Property="Padding" Value="15,7"/>
+                            <Setter Property="CornerRadius" Value="8"/>
+                            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+                            <Setter Property="FontSize" Value="13.5"/>
+                            <Setter Property="FontWeight" Value="Medium"/>
+                        </Style>
+                        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                            <Setter Property="Background" Value="#34343E"/>
+                            <Setter Property="TextElement.Foreground" Value="#FFFFFF"/>
+                        </Style>
+                    </ListBox.Styles>
+                </ListBox>
+
+                <Button Command="{Binding OpenSettingsCommand}" HorizontalAlignment="Right"
+                        VerticalAlignment="Center" Background="Transparent" BorderThickness="0"
+                        Width="34" Height="34" CornerRadius="9" ToolTip.Tip="Settings">
+                    <Path Width="17" Height="17" Stretch="Uniform" Fill="{StaticResource Muted}"
+                          Data="M12 8a4 4 0 100 8 4 4 0 000-8zm9 4a7 7 0 00-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 00-2-1.2l-.4-2.6H9.9l-.4 2.6a7 7 0 00-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 003 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 002 1.2l.4 2.6h4.2l.4-2.6a7 7 0 002-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z"/>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Content area (real section views land here as we port them) -->
+        <Border Padding="32">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
+                <TextBlock Text="{Binding SelectedTab}" Foreground="{StaticResource Ink}"
+                           FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                <TextBlock Text="Native Windows rebuild in progress — this section is being ported from the macOS app."
+                           Foreground="{StaticResource Muted}" FontSize="14" MaxWidth="440"
+                           TextWrapping="Wrap" TextAlignment="Center"/>
+            </StackPanel>
+        </Border>
+    </DockPanel>
+</Window>

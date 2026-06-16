@@ -23,3 +23,7 @@ xcuserdata/
 
 # Node / Tauri desktop
 node_modules/
+
+# .NET / Avalonia (Windows native rewrite)
+windows/**/bin/
+windows/**/obj/
