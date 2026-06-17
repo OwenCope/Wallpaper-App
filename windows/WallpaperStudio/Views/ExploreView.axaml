@@ -3,10 +3,57 @@
              xmlns:vm="using:WallpaperStudio.ViewModels"
              x:Class="WallpaperStudio.Views.ExploreView"
              x:DataType="vm:ExploreViewModel">
-  <Border Padding="32">
-    <StackPanel Spacing="6" VerticalAlignment="Top">
-      <TextBlock Text="{Binding Title}" FontSize="26" FontWeight="SemiBold" Foreground="{DynamicResource Ink}"/>
-      <TextBlock Text="Coming next in the native rebuild." Foreground="{DynamicResource Muted}" FontSize="14"/>
-    </StackPanel>
-  </Border>
+    <DockPanel>
+        <!-- Search row -->
+        <Grid DockPanel.Dock="Top" Margin="32,28,32,8" ColumnDefinitions="*,Auto">
+            <TextBox Grid.Column="0" Text="{Binding Query}" Watermark="Search wallpapers…"
+                     MaxWidth="560" HorizontalAlignment="Left" CornerRadius="10" Padding="12,9">
+                <TextBox.KeyBindings>
+                    <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}"/>
+                </TextBox.KeyBindings>
+            </TextBox>
+            <Button Grid.Column="1" Content="Search" Command="{Binding SearchCommand}"
+                    Background="{DynamicResource AccentBrush}" Foreground="White"
+                    CornerRadius="10" Padding="16,9" Margin="10,0,0,0"/>
+        </Grid>
+
+        <TextBlock DockPanel.Dock="Top" Margin="32,4" Foreground="{DynamicResource Muted}"
+                   Text="Couldn’t reach Wallhaven, or no results. Try another search."
+                   IsVisible="{Binding Empty}"/>
+
+        <ScrollViewer Margin="24,8,24,16">
+            <ItemsControl ItemsSource="{Binding Results}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PhotoVM">
+                        <Border Width="288" Height="162" Margin="8" CornerRadius="14"
+                                Background="#15151D" ClipToBounds="True">
+                            <Grid>
+                                <Image Source="{Binding Thumb}" Stretch="UniformToFill"/>
+                                <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8"
+                                        Background="#B0000000" CornerRadius="6" Padding="6,2"
+                                        IsVisible="{Binding Is4K}">
+                                    <TextBlock Text="4K" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                </Border>
+                                <Border VerticalAlignment="Bottom" Background="#99000000" Padding="10,8">
+                                    <Grid ColumnDefinitions="*,Auto,Auto">
+                                        <TextBlock Grid.Column="0" Text="{Binding Resolution}" Foreground="#E6FFFFFF"
+                                                   FontSize="11" VerticalAlignment="Center"/>
+                                        <Button Grid.Column="1" Content="Set" Command="{Binding SetWallpaperCommand}"
+                                                Background="{DynamicResource AccentBrush}" Foreground="White"
+                                                CornerRadius="8" Padding="10,4" FontSize="12"/>
+                                        <Button Grid.Column="2" Content="Save" Command="{Binding SaveCommand}"
+                                                Background="#33FFFFFF" Foreground="White" Margin="6,0,0,0"
+                                                CornerRadius="8" Padding="10,4" FontSize="12"/>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
 </UserControl>
