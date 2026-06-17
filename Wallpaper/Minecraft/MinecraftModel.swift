@@ -594,14 +594,21 @@ enum MinecraftModel {
         }   // end per-skin loop
 
         // Camera.
+        let camZ = 62 + CGFloat(max(0, skins.count - 1)) * 16
         let camera = SCNCamera()
         camera.fieldOfView = 55
-        camera.zNear = 1
-        camera.zFar = 2000     // default 100 clips characters once the camera pulls back for 4+ players
+        // Keep the near/far range TIGHT around the characters. A huge range (the old
+        // 1…2000) leaves almost no depth precision at this distance, so the thin gap
+        // between the skin and the armor layers falls below the depth resolution and the
+        // two surfaces z-fight (the shimmering hatch on the body). zNear 10 is still far
+        // closer than any geometry (nearest face is ~45 units away), and zFar tracks the
+        // camera so it never clips characters while staying as tight as possible.
+        camera.zNear = 10
+        camera.zFar = camZ + 250
         let cameraNode = SCNNode()
         cameraNode.name = "camera"
         cameraNode.camera = camera
-        cameraNode.position = SCNVector3(0, 0, 62 + CGFloat(max(0, skins.count - 1)) * 16)
+        cameraNode.position = SCNVector3(0, 0, camZ)
         scene.rootNode.addChildNode(cameraNode)
 
         // Light (only affects armor; skin uses .constant so it stays flat & true-colored).
@@ -738,13 +745,15 @@ enum MinecraftModel {
     }()
 
     /// Faint violet enchant sheen on every material in a subtree (copies materials first).
+    /// Uses a diffuse-multiply tint, not emission: on this model an emission glint blew out
+    /// the whole trident solid purple and hid the texture. A multiply keeps the texture and
+    /// just shifts it toward violet.
     private static func applyGlint(_ node: SCNNode) {
         node.enumerateHierarchy { n, _ in
             guard let g = n.geometry else { return }
             g.materials = g.materials.map { mat in
                 let c = mat.copy() as! SCNMaterial
-                c.emission.contents = NSColor(red: 0.64, green: 0.21, blue: 0.93, alpha: 1)
-                c.emission.intensity = 0.06
+                c.multiply.contents = NSColor(srgbRed: 0.80, green: 0.72, blue: 1.0, alpha: 1)
                 return c
             }
         }

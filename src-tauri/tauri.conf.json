@@ -1,26 +1,30 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Minecraft Studio",
-  "version": "1.1.0",
+  "productName": "Wallpaper Studio",
+  "version": "1.2.1",
   "identifier": "app.creatordb.wallpaperstudio",
   "build": {
-    "frontendDist": "../web"
+    "frontendDist": "../desktop"
   },
   "app": {
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Minecraft Studio",
-        "width": 1200,
-        "height": 800,
-        "minWidth": 900,
-        "minHeight": 600,
+        "title": "Wallpaper Studio",
+        "width": 1280,
+        "height": 840,
+        "minWidth": 960,
+        "minHeight": 640,
         "resizable": true,
         "fullscreen": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
     }
   },
   "bundle": {

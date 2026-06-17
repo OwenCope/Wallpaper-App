@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:WallpaperStudio.ViewModels"
+             xmlns:conv="using:WallpaperStudio.Converters"
+             x:Class="WallpaperStudio.Views.GenerateView"
+             x:DataType="vm:GenerateViewModel">
+    <UserControl.Resources>
+        <conv:PresetToBrushConverter x:Key="PresetBrush"/>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="32,32,32,0" Spacing="6">
+            <TextBlock Text="Generate" FontSize="26" FontWeight="SemiBold" Foreground="{DynamicResource Ink}"/>
+            <TextBlock Text="Pick a gradient to set as your wallpaper." Foreground="{DynamicResource Muted}" FontSize="14"/>
+            <TextBlock Text="{Binding Status}" Foreground="{DynamicResource Muted}" FontSize="13"
+                       IsVisible="{Binding Status, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+        </StackPanel>
+
+        <ScrollViewer Margin="24,16,24,24">
+            <ItemsControl ItemsSource="{Binding Presets}" x:CompileBindings="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Command="{Binding DataContext.ApplyCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                CommandParameter="{Binding}"
+                                Background="Transparent" BorderThickness="0" Padding="0" Margin="8"
+                                Cursor="Hand">
+                            <Border Width="248" Height="140" CornerRadius="14"
+                                    Background="{Binding Converter={StaticResource PresetBrush}}">
+                                <TextBlock Text="{Binding Name}" Foreground="White" FontWeight="SemiBold"
+                                           FontSize="14" Margin="12" VerticalAlignment="Bottom"/>
+                            </Border>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

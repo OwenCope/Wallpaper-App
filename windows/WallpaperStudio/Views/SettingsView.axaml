@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:WallpaperStudio.ViewModels"
+             x:Class="WallpaperStudio.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.eyebrow">
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="LetterSpacing" Value="1"/>
+            <Setter Property="Margin" Value="2,18,0,8"/>
+        </Style>
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer>
+        <StackPanel Margin="32" Spacing="2" MaxWidth="620" HorizontalAlignment="Left">
+            <TextBlock Text="Settings" FontSize="26" FontWeight="SemiBold"
+                       Foreground="{DynamicResource Ink}" Margin="0,0,0,8"/>
+
+            <TextBlock Classes="eyebrow" Text="WALLHAVEN"/>
+            <Border Classes="card">
+                <DockPanel>
+                    <TextBlock Text="API key" VerticalAlignment="Center"
+                               Foreground="{DynamicResource Ink}" DockPanel.Dock="Left"/>
+                    <TextBox Text="{Binding ApiKey}" Watermark="optional" Width="280"
+                             HorizontalAlignment="Right"/>
+                </DockPanel>
+            </Border>
+            <TextBlock Text="Optional. A free key (wallhaven.cc → Settings → Account) raises rate limits."
+                       Foreground="{DynamicResource Muted}" FontSize="12" Margin="2,0,0,4" TextWrapping="Wrap"/>
+
+            <TextBlock Classes="eyebrow" Text="AUTO-ROTATE"/>
+            <Border Classes="card">
+                <DockPanel>
+                    <TextBlock Text="Rotate wallpaper" VerticalAlignment="Center"
+                               Foreground="{DynamicResource Ink}" DockPanel.Dock="Left"/>
+                    <ComboBox ItemsSource="{Binding Intervals}" SelectedIndex="{Binding IntervalIndex}"
+                              Width="200" HorizontalAlignment="Right"/>
+                </DockPanel>
+            </Border>
+            <Border Classes="card">
+                <DockPanel>
+                    <TextBlock Text="Rotate favorites only" VerticalAlignment="Center"
+                               Foreground="{DynamicResource Ink}" DockPanel.Dock="Left"/>
+                    <CheckBox IsChecked="{Binding FavoritesOnly}" HorizontalAlignment="Right"/>
+                </DockPanel>
+            </Border>
+            <Border Classes="card">
+                <DockPanel>
+                    <TextBlock Text="Apply to all displays" VerticalAlignment="Center"
+                               Foreground="{DynamicResource Ink}" DockPanel.Dock="Left"/>
+                    <CheckBox IsChecked="{Binding AllScreens}" HorizontalAlignment="Right"/>
+                </DockPanel>
+            </Border>
+
+            <TextBlock Classes="eyebrow" Text="CREDITS"/>
+            <TextBlock Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap"
+                       Text="Wallpapers via Wallhaven · Minecraft skins via Minotar / mc-heads / Starlight Skins · Minecraft assets © Mojang."/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

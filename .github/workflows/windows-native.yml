@@ -1,0 +1,55 @@
+name: Build Windows (Native)
+
+# Builds the Avalonia/.NET Windows app.
+#  - Push a tag like  native-v0.1.0  -> prerelease with the runnable app zip attached.
+#  - Run manually -> uploads the app zip as a downloadable artifact, no release.
+on:
+  push:
+    tags:
+      - "native-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows/WallpaperStudio
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish (self-contained, single file, win-x64)
+        run: >
+          dotnet publish -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=None
+
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path bin/Release/net8.0/win-x64/publish/* -DestinationPath WallpaperStudio-win-x64.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WallpaperStudio-win-x64
+          if-no-files-found: error
+          path: windows/WallpaperStudio/WallpaperStudio-win-x64.zip
+
+      - name: Publish prerelease (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Wallpaper Studio — Native Windows ${{ github.ref_name }}"
+          body: "Native Avalonia/.NET Windows build. Unzip and run WallpaperStudio.exe. Beta — work in progress."
+          prerelease: true
+          files: windows/WallpaperStudio/WallpaperStudio-win-x64.zip

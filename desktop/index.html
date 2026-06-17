@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wallpaper Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0a0f; --panel:rgba(255,255,255,.045); --panel2:rgba(255,255,255,.07);
+    --line:rgba(255,255,255,.08); --ink:#ECECF1; --mut:#8b8b97; --faint:#62626d;
+    --a1:#6366f1; --a2:#a855f7; --spark:#22d3ee;
+    --accent:#7c6cf2;                       /* solid fallback for JS-set borders/spinners */
+    --grad:linear-gradient(120deg,var(--a1),var(--a2));
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; color:var(--ink); overflow:hidden;
+    font-family:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+    background:var(--bg); }
+  /* living aurora so the dark never reads flat */
+  body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(60% 50% at 12% -5%, rgba(99,102,241,.22), transparent 60%),
+      radial-gradient(55% 45% at 100% 8%, rgba(168,85,247,.16), transparent 55%),
+      radial-gradient(70% 60% at 50% 120%, rgba(34,211,238,.07), transparent 60%); }
+  #app{ position:relative; z-index:1; display:flex; height:100%; }
+
+  /* Left rail */
+  .rail{ width:228px; flex:none; display:flex; flex-direction:column; gap:6px; padding:18px 14px;
+    border-right:1px solid var(--line); background:rgba(8,8,12,.4); backdrop-filter:blur(12px); -webkit-app-region:drag; }
+  .brand{ display:flex; align-items:center; gap:11px; padding:8px 10px 16px; }
+  .brand .mark{ width:34px; height:34px; border-radius:11px; background:var(--grad); display:grid; place-items:center;
+    font-size:17px; box-shadow:0 6px 20px rgba(124,108,242,.45); }
+  .brand>span:last-child{ display:flex; flex-direction:column; }
+  .brand .name{ display:block; font-family:"Space Grotesk",sans-serif; font-weight:700; font-size:15.5px; letter-spacing:.2px; line-height:1.15; }
+  .brand .sub{ display:block; font-size:11px; color:var(--faint); margin-top:3px; }
+  nav{ display:flex; flex-direction:column; gap:3px; -webkit-app-region:no-drag; }
+  nav button{ position:relative; display:flex; align-items:center; gap:11px; text-align:left;
+    background:none; border:none; color:var(--mut); font:inherit; font-size:14.5px; font-weight:500;
+    padding:10px 12px; border-radius:11px; cursor:pointer; transition:.15s; }
+  nav button .ic{ font-size:16px; width:20px; text-align:center; filter:grayscale(.3); }
+  nav button:hover:not(.active){ color:var(--ink); background:var(--panel); }
+  nav button.active{ color:#fff; background:var(--panel2); }
+  nav button.active::before{ content:""; position:absolute; left:-14px; top:9px; bottom:9px; width:3px;
+    border-radius:0 3px 3px 0; background:var(--grad); box-shadow:0 0 12px rgba(124,108,242,.8); }
+  .spacer{ flex:1; }
+  .iconbtn{ -webkit-app-region:no-drag; display:flex; align-items:center; gap:10px; width:100%;
+    background:none; border:none; color:var(--mut); border-radius:11px; cursor:pointer; font:inherit; font-size:14px; padding:10px 12px; }
+  .iconbtn:hover{ color:var(--ink); background:var(--panel); }
+
+  main{ flex:1; overflow-y:auto; padding:30px 34px; scrollbar-width:thin; }
+  .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  h2{ font-family:"Space Grotesk",sans-serif; font-size:27px; font-weight:600; letter-spacing:-.5px; margin:0 0 6px; }
+  h3{ font-size:12px; color:var(--a2); margin:30px 0 12px; text-transform:uppercase; letter-spacing:1.4px; font-weight:600;
+    display:flex; align-items:center; gap:9px; }
+  h3::before{ content:""; width:16px; height:1.5px; background:var(--grad); border-radius:2px; }
+
+  .search{ display:flex; gap:10px; align-items:center; background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:13px 16px; width:560px; max-width:100%; transition:.18s; }
+  .search:focus-within{ border-color:rgba(124,108,242,.7); box-shadow:0 0 0 3px rgba(124,108,242,.18); background:var(--panel2); }
+  .search input{ background:none; border:none; color:#fff; font:inherit; font-size:15px; width:100%; outline:none; }
+  button.primary{ background:var(--grad); color:#fff; border:none; border-radius:11px; padding:11px 18px; font:inherit;
+    font-weight:600; cursor:pointer; box-shadow:0 6px 18px rgba(124,108,242,.35); transition:.15s; }
+  button.primary:hover{ filter:brightness(1.08); transform:translateY(-1px); }
+  button.primary:disabled{ opacity:.6; transform:none; cursor:default; }
+  button.ghost{ background:var(--panel); border:1px solid var(--line); color:var(--ink); border-radius:11px;
+    padding:11px 16px; font:inherit; cursor:pointer; transition:.15s; }
+  button.ghost:hover{ background:var(--panel2); }
+  select,input[type=text]{ background:var(--panel); border:1px solid var(--line); color:#fff; border-radius:10px;
+    padding:9px 11px; font:inherit; outline:none; }
+  select:focus,input[type=text]:focus{ border-color:rgba(124,108,242,.6); }
+
+  /* Grids + cards */
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:18px; margin-top:18px; }
+  .card{ position:relative; aspect-ratio:16/9; border-radius:16px; overflow:hidden; background:#15151d;
+    border:1px solid var(--line); cursor:pointer; transition:transform .22s, box-shadow .22s, border-color .22s; }
+  .card:hover{ transform:translateY(-4px); border-color:rgba(124,108,242,.5);
+    box-shadow:0 16px 36px rgba(0,0,0,.5), 0 0 0 1px rgba(124,108,242,.25); }
+  .card img{ width:100%; height:100%; object-fit:cover; display:block; transition:transform .35s; }
+  .card:hover img{ transform:scale(1.05); }
+  .card .meta{ position:absolute; left:0; right:0; bottom:0; padding:10px 12px; font-size:11.5px; color:#fff; font-weight:500;
+    background:linear-gradient(transparent, rgba(0,0,0,.78)); display:flex; justify-content:space-between; align-items:center;
+    transition:opacity .2s; }
+  .card:hover .meta{ opacity:0; }
+  .card .actions{ position:absolute; inset:0; display:flex; gap:9px; align-items:center; justify-content:center; opacity:0;
+    background:linear-gradient(180deg, rgba(10,10,15,.2), rgba(10,10,15,.7)); transition:opacity .2s; }
+  .card:hover .actions{ opacity:1; }
+  .card .actions button{ font-size:12.5px; padding:9px 14px; }
+  .badge{ position:absolute; top:10px; left:10px; background:rgba(10,10,15,.7); backdrop-filter:blur(6px);
+    border:1px solid var(--line); border-radius:7px; padding:3px 8px; font-size:10px; font-weight:700; letter-spacing:.5px; }
+  .fav{ position:absolute; top:9px; right:9px; background:rgba(10,10,15,.55); backdrop-filter:blur(6px); border:1px solid var(--line);
+    color:#fff; border-radius:50%; width:30px; height:30px; cursor:pointer; font-size:14px; transition:.15s; }
+  .fav:hover{ transform:scale(1.12); }
+  .fav.on{ color:#ff5a7a; border-color:rgba(255,90,122,.5); }
+
+  .tiles{ display:grid; grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:14px; }
+  .tile{ aspect-ratio:16/10; border-radius:16px; cursor:pointer; display:flex; align-items:flex-end; padding:14px;
+    font-family:"Space Grotesk",sans-serif; font-weight:600; font-size:15px; color:#fff; position:relative; overflow:hidden;
+    border:1px solid var(--line); box-shadow:inset 0 -40px 50px -30px rgba(0,0,0,.7); transition:transform .2s, box-shadow .2s; }
+  .tile:hover{ transform:translateY(-3px); box-shadow:inset 0 -40px 50px -30px rgba(0,0,0,.7), 0 14px 30px rgba(0,0,0,.45); }
+
+  .empty{ color:var(--mut); text-align:center; padding:72px 20px; font-size:14.5px; line-height:1.6; }
+  .toast{ position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:rgba(18,18,24,.92);
+    backdrop-filter:blur(20px); border:1px solid var(--line); border-left:3px solid #7c6cf2;
+    padding:12px 18px; border-radius:13px; font-size:13.5px; z-index:50; box-shadow:0 18px 50px rgba(0,0,0,.55); animation:rise .25s ease; }
+  @keyframes rise{ from{ opacity:0; transform:translate(-50%,8px); } }
+
+  .gradcard{ aspect-ratio:16/9; border-radius:16px; cursor:pointer; border:1px solid var(--line); position:relative;
+    overflow:hidden; transition:transform .2s, box-shadow .2s; }
+  .gradcard:hover{ transform:translateY(-4px); box-shadow:0 16px 36px rgba(0,0,0,.5); }
+  .gradcard span{ position:absolute; bottom:10px; left:12px; font-family:"Space Grotesk",sans-serif; font-weight:600;
+    font-size:14px; text-shadow:0 1px 6px rgba(0,0,0,.7); }
+
+  .setting{ display:flex; align-items:center; justify-content:space-between; background:var(--panel); border:1px solid var(--line);
+    border-radius:13px; padding:14px 16px; margin-bottom:10px; max-width:560px; font-size:14px; }
+  label{ font-size:14px; }
+  input[type=checkbox]{ width:18px; height:18px; accent-color:#7c6cf2; }
+  .hide{ display:none !important; }
+  .spin{ width:26px;height:26px;border:3px solid var(--line);border-top-color:#7c6cf2;border-radius:50%;animation:s 1s linear infinite;margin:46px auto;}
+  @keyframes s{to{transform:rotate(360deg)}}
+  ::-webkit-scrollbar{ width:10px; } ::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.1); border-radius:6px; border:3px solid transparent; background-clip:padding-box; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside class="rail">
+    <div class="brand">
+      <span class="mark">🖼️</span>
+      <span><span class="name">Wallpaper Studio</span><span class="sub">make your desktop yours</span></span>
+    </div>
+    <nav id="nav">
+      <button data-tab="home" class="active"><span class="ic">✦</span>Home</button>
+      <button data-tab="explore"><span class="ic">🔍</span>Explore</button>
+      <button data-tab="library"><span class="ic">🗂️</span>Library</button>
+      <button data-tab="generate"><span class="ic">🎨</span>Generate</button>
+      <button data-tab="minecraft"><span class="ic">⛏️</span>Minecraft</button>
+    </nav>
+    <span class="spacer"></span>
+    <button class="iconbtn" id="settingsBtn" title="Settings"><span class="ic">⚙️</span>Settings</button>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<script>
+const TAURI = window.__TAURI__;
+const invoke = TAURI ? TAURI.core.invoke : async()=>{ throw new Error("not in app"); };
+const toFileSrc = TAURI ? TAURI.core.convertFileSrc : (p)=>p;
+const main = document.getElementById("main");
+
+// ---------- tiny persistent store (JSON files in app data) ----------
+async function load(name, fallback){ try{ const t=await invoke("read_store",{name}); return t? JSON.parse(t):fallback; }catch(e){ return fallback; } }
+async function save(name, value){ try{ await invoke("write_store",{name, contents:JSON.stringify(value)}); }catch(e){} }
+let settings = { apiKey:"", rotateMins:0, favoritesOnly:false };
+let favorites = [];          // absolute paths
+let libraryFolder = "";
+
+function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2600); }
+
+// ---------- Wallhaven ----------
+const WH = "https://wallhaven.cc/api/v1";
+async function whSearch({q="", page=1, sorting="toplist"}){
+  let url = `${WH}/search?categories=111&purity=100&atleast=1920x1080&sorting=${sorting}&page=${page}`;
+  if(q) url += `&q=${encodeURIComponent(q)}`;
+  if(settings.apiKey) url += `&apikey=${settings.apiKey}`;
+  const txt = await invoke("http_get",{url});
+  return JSON.parse(txt);
+}
+async function setWallpaperFromUrl(url, btn){
+  if(btn){ btn.disabled=true; btn.textContent="Setting…"; }
+  try{ await invoke("set_wallpaper_url",{url}); toast("Wallpaper set ✓"); }
+  catch(e){ toast("Failed: "+e); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent="Set"; } }
+}
+
+function whCard(p){
+  const c=document.createElement("div"); c.className="card";
+  const is4k = p.resolution && (p.resolution.startsWith("3840")||p.resolution.startsWith("7680"));
+  c.innerHTML = `<img loading="lazy" src="${p.thumbs.large}" alt="">
+    ${is4k?'<span class="badge">4K</span>':''}
+    <div class="meta"><span>${p.resolution||""}</span></div>
+    <div class="actions">
+      <button class="primary set">Set</button>
+      <button class="ghost dl">Save</button>
+    </div>`;
+  c.querySelector(".set").onclick=(e)=>{ e.stopPropagation(); setWallpaperFromUrl(p.path, e.target); };
+  c.querySelector(".dl").onclick=async(e)=>{ e.stopPropagation(); e.target.textContent="Saving…";
+    try{ const path=await invoke("download_file",{subdir:"library", name:null, url:p.path}); toast("Saved to Library"); }
+    catch(err){ toast("Save failed"); } e.target.textContent="Save"; };
+  return c;
+}
+
+// ---------- Views ----------
+const CATEGORIES = [
+  ["Nature","nature landscape","linear-gradient(135deg,#2e7d32,#1b5e20)"],
+  ["Animals","animals wildlife","linear-gradient(135deg,#8d6e63,#4e342e)"],
+  ["Tech","technology setup","linear-gradient(135deg,#37474f,#102027)"],
+  ["Space","space galaxy stars","linear-gradient(135deg,#311b92,#000)"],
+  ["Minimal","minimal abstract","linear-gradient(135deg,#546e7a,#263238)"],
+  ["Mountains","mountains","linear-gradient(135deg,#455a64,#1c313a)"],
+  ["Ocean","ocean sea water","linear-gradient(135deg,#0277bd,#01579b)"],
+  ["Forest","forest trees","linear-gradient(135deg,#2e7d32,#0d3010)"],
+];
+
+async function viewHome(){
+  main.innerHTML = `<h2>Featured</h2><div id="hero" class="grid"></div>
+    <h3>Browse by category</h3><div class="tiles" id="tiles"></div>`;
+  const tiles=document.getElementById("tiles");
+  CATEGORIES.forEach(([name,q,bg])=>{ const t=document.createElement("div"); t.className="tile"; t.style.background=bg; t.textContent=name;
+    t.onclick=()=>{ go("explore"); setTimeout(()=>runExplore(q),50); }; tiles.appendChild(t); });
+  try{ const r=await whSearch({q:"nature landscape", sorting:"toplist"});
+    const hero=document.getElementById("hero"); (r.data||[]).slice(0,8).forEach(p=>hero.appendChild(whCard(p)));
+  }catch(e){ document.getElementById("hero").innerHTML=`<p class="empty">Couldn't reach Wallhaven. Check your connection.</p>`; }
+}
+
+let exPage=1, exQuery="", exLoading=false, exDone=false;
+function viewExplore(){
+  main.innerHTML = `<div class="row"><div class="search"><span>🔍</span>
+      <input id="q" type="text" placeholder="Search wallpapers…"></div>
+      <button class="primary" id="goSearch">Search</button></div>
+    <div class="grid" id="exGrid"></div><div id="exSpin"></div>`;
+  const q=document.getElementById("q"); q.value=exQuery;
+  document.getElementById("goSearch").onclick=()=>runExplore(q.value);
+  q.onkeydown=(e)=>{ if(e.key==="Enter") runExplore(q.value); };
+  main.onscroll=null;
+  main.addEventListener("scroll", onExScroll);
+  if(!document.getElementById("exGrid").children.length) runExplore(exQuery);
+}
+function onExScroll(){ if(main.scrollTop+main.clientHeight > main.scrollHeight-600) loadMoreExplore(); }
+async function runExplore(q){ exQuery=q||""; exPage=1; exDone=false; const g=document.getElementById("exGrid"); if(g) g.innerHTML=""; await loadMoreExplore(); }
+async function loadMoreExplore(){
+  if(exLoading||exDone) return; exLoading=true;
+  const spin=document.getElementById("exSpin"); if(spin) spin.innerHTML='<div class="spin"></div>';
+  try{ const r=await whSearch({q:exQuery, page:exPage, sorting: exQuery?"relevance":"toplist"});
+    const g=document.getElementById("exGrid"); (r.data||[]).forEach(p=>g.appendChild(whCard(p)));
+    if(r.meta && exPage>=r.meta.last_page) exDone=true; exPage++;
+  }catch(e){ toast("Search failed"); }
+  finally{ exLoading=false; const s=document.getElementById("exSpin"); if(s) s.innerHTML=""; }
+}
+
+// ---------- Library ----------
+function imgPath(p){ return toFileSrc(p); }
+async function viewLibrary(){
+  main.onscroll=null;
+  main.innerHTML = `<div class="row">
+      <button class="primary" id="pick">📁 Choose Folder</button>
+      <button class="ghost" id="shuffle">🔀 Shuffle now</button>
+      <span class="spacer"></span>
+    </div>
+    <h3>Auto-rotate (while app is open)</h3>
+    <div class="setting"><label>Rotate every</label>
+      <select id="rot">
+        <option value="0">Off</option><option value="15">15 minutes</option>
+        <option value="60">1 hour</option><option value="360">6 hours</option><option value="1440">1 day</option>
+      </select></div>
+    <div class="setting"><label>Favorites only</label><input type="checkbox" id="favOnly"></div>
+    <h3 id="libHead">Photos</h3>
+    <div class="grid" id="libGrid"></div>`;
+  document.getElementById("rot").value=String(settings.rotateMins||0);
+  document.getElementById("favOnly").checked=!!settings.favoritesOnly;
+  document.getElementById("rot").onchange=(e)=>{ settings.rotateMins=+e.target.value; save("settings.json",settings); startRotation(); };
+  document.getElementById("favOnly").onchange=(e)=>{ settings.favoritesOnly=e.target.checked; save("settings.json",settings); };
+  document.getElementById("pick").onclick=pickFolder;
+  document.getElementById("shuffle").onclick=shuffleNow;
+  renderLibrary();
+}
+async function pickFolder(){
+  try{ const sel=await invoke("plugin:dialog|open",{ options:{ directory:true, multiple:false } });
+    if(sel){ libraryFolder=sel; await save("folder.json",{path:sel}); renderLibrary(); }
+  }catch(e){ toast("Couldn't open folder picker"); }
+}
+async function libraryImages(){
+  if(!libraryFolder) return [];
+  try{ return await invoke("list_images",{dir:libraryFolder}); }catch(e){ return []; }
+}
+async function renderLibrary(){
+  const grid=document.getElementById("libGrid"); if(!grid) return;
+  const imgs = await libraryImages();
+  if(!libraryFolder){ grid.innerHTML=`<p class="empty">Choose a folder of images to build your library.</p>`; return; }
+  if(!imgs.length){ grid.innerHTML=`<p class="empty">No images found in that folder.</p>`; return; }
+  grid.innerHTML="";
+  imgs.forEach(path=>{
+    const c=document.createElement("div"); c.className="card";
+    const on = favorites.includes(path);
+    c.innerHTML=`<img loading="lazy" src="${imgPath(path)}">
+      <button class="fav ${on?'on':''}">♥</button>
+      <div class="actions"><button class="primary">Set as Wallpaper</button></div>`;
+    c.querySelector(".primary").onclick=async(e)=>{ e.stopPropagation();
+      try{ await invoke("set_wallpaper_path",{path}); toast("Wallpaper set ✓"); }catch(err){ toast("Failed"); } };
+    const fav=c.querySelector(".fav");
+    fav.onclick=(e)=>{ e.stopPropagation();
+      if(favorites.includes(path)) favorites=favorites.filter(x=>x!==path); else favorites.push(path);
+      fav.classList.toggle("on"); save("favorites.json",favorites); };
+    grid.appendChild(c);
+  });
+}
+async function shuffleNow(){
+  let pool = settings.favoritesOnly ? favorites : await libraryImages();
+  if(!pool.length){ toast(settings.favoritesOnly?"No favorites yet":"No images — choose a folder"); return; }
+  const path = pool[Math.floor(Math.random()*pool.length)];
+  try{ await invoke("set_wallpaper_path",{path}); toast("Shuffled ✓"); }catch(e){ toast("Failed"); }
+}
+let rotTimer=null;
+function startRotation(){ if(rotTimer) clearInterval(rotTimer); rotTimer=null;
+  const m=settings.rotateMins||0; if(m>0) rotTimer=setInterval(shuffleNow, m*60*1000); }
+
+// ---------- Generate (gradients) ----------
+const GRADIENTS = [
+  ["Dusk", ["#4f46e5","#7c3aed","#db2777"], 135],
+  ["Ocean", ["#14b8a6","#2563eb","#3730a3"], 115],
+  ["Sunrise", ["#fb923c","#ec4899","#7c3aed"], 90],
+  ["Forest", ["#22c55e","#14b8a6","#04130a"], 160],
+  ["Graphite", ["#6b7280","#0b0b0d"], 135],
+  ["Candy", ["#ec4899","#a855f7","#3b82f6"], 45],
+];
+function drawGradient(ctx,w,h,colors,angleDeg){
+  const a=angleDeg*Math.PI/180, cx=w/2, cy=h/2, len=Math.abs(Math.cos(a))*w/2+Math.abs(Math.sin(a))*h/2;
+  const g=ctx.createLinearGradient(cx-Math.cos(a)*len, cy-Math.sin(a)*len, cx+Math.cos(a)*len, cy+Math.sin(a)*len);
+  colors.forEach((c,i)=>g.addColorStop(i/(colors.length-1), c));
+  ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+}
+function viewGenerate(){
+  main.onscroll=null;
+  main.innerHTML=`<h2>Generate a gradient wallpaper</h2><div class="grid" id="grads"></div>`;
+  const wrap=document.getElementById("grads");
+  GRADIENTS.forEach(([name,colors,angle])=>{
+    const d=document.createElement("div"); d.className="gradcard";
+    const cv=document.createElement("canvas"); cv.width=320; cv.height=180; cv.style.width="100%"; cv.style.height="100%";
+    drawGradient(cv.getContext("2d"),320,180,colors,angle);
+    d.appendChild(cv); const s=document.createElement("span"); s.textContent=name; d.appendChild(s);
+    d.onclick=()=>applyGradient(name,colors,angle);
+    wrap.appendChild(d);
+  });
+}
+async function applyGradient(name,colors,angle){
+  const w=2560,h=1440; const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+  drawGradient(cv.getContext("2d"),w,h,colors,angle);
+  const b64=cv.toDataURL("image/png");
+  try{ const path=await invoke("save_b64",{subdir:"generated", name:`gradient-${name}.png`, b64});
+    await invoke("set_wallpaper_path",{path}); toast(`Set “${name}” as wallpaper ✓`); }
+  catch(e){ toast("Failed: "+e); }
+}
+
+// ---------- Minecraft ----------
+function viewMinecraft(){ window.location.href="minecraft.html"; }
+
+// ---------- Settings ----------
+function openSettings(){
+  main.onscroll=null;
+  main.innerHTML=`<h2>Settings</h2>
+    <h3>Wallhaven</h3>
+    <div class="setting"><label>API key (optional — higher rate limits)</label>
+      <input type="text" id="apiKey" style="width:240px" placeholder="paste key"></div>
+    <p class="empty" style="text-align:left;padding:0 0 10px">Get a free key at wallhaven.cc → Settings → Account.</p>
+    <h3>Credits</h3>
+    <p class="empty" style="text-align:left">Wallpapers: Wallhaven · Minecraft skins: Minotar / mc-heads / Starlight Skins · Minecraft assets: Mojang.</p>`;
+  const k=document.getElementById("apiKey"); k.value=settings.apiKey||"";
+  k.onchange=()=>{ settings.apiKey=k.value.trim(); save("settings.json",settings); };
+}
+
+// ---------- nav ----------
+const VIEWS={ home:viewHome, explore:viewExplore, library:viewLibrary, generate:viewGenerate, minecraft:viewMinecraft };
+function go(tab){
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active", b.dataset.tab===tab));
+  (VIEWS[tab]||viewHome)();
+}
+document.querySelectorAll("#nav button").forEach(b=> b.onclick=()=>go(b.dataset.tab));
+document.getElementById("settingsBtn").onclick=openSettings;
+
+// ---------- boot ----------
+(async function boot(){
+  settings = await load("settings.json", settings);
+  favorites = await load("favorites.json", []);
+  const f = await load("folder.json", null); if(f && f.path) libraryFolder=f.path;
+  startRotation();
+  go("home");
+})();
+</script>
+</body>
+</html>

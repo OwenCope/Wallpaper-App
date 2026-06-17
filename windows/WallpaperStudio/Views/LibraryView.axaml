@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:WallpaperStudio.ViewModels"
+             xmlns:conv="using:WallpaperStudio.Converters"
+             x:Class="WallpaperStudio.Views.LibraryView"
+             x:DataType="vm:LibraryViewModel">
+    <UserControl.Resources>
+        <conv:FavoriteBrushConverter x:Key="FavBrush"/>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <Grid DockPanel.Dock="Top" Margin="32,28,32,8" ColumnDefinitions="Auto,Auto,*,Auto">
+            <Button Grid.Column="0" Content="Choose Folder" Click="OnPickFolder"
+                    Background="{DynamicResource AccentBrush}" Foreground="White" CornerRadius="10" Padding="14,8"/>
+            <Button Grid.Column="1" Content="Shuffle now" Command="{Binding ShuffleCommand}" Margin="10,0,0,0"
+                    Background="{DynamicResource PanelBg}" Foreground="{DynamicResource Ink}" CornerRadius="10" Padding="14,8"/>
+            <TextBlock Grid.Column="3" Text="{Binding FolderName}" VerticalAlignment="Center"
+                       Foreground="{DynamicResource Muted}" FontSize="13"/>
+        </Grid>
+
+        <TextBlock DockPanel.Dock="Top" Margin="32,30" Foreground="{DynamicResource Muted}" FontSize="14"
+                   Text="Choose a folder of images to build your library." IsVisible="{Binding Empty}"/>
+
+        <ScrollViewer Margin="24,8,24,16">
+            <ItemsControl ItemsSource="{Binding Items}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LibItem">
+                        <Border Width="288" Height="162" Margin="8" CornerRadius="14"
+                                Background="#15151D" ClipToBounds="True">
+                            <Grid>
+                                <Image Source="{Binding Thumb}" Stretch="UniformToFill"/>
+                                <Button Command="{Binding ToggleFavoriteCommand}" VerticalAlignment="Top"
+                                        HorizontalAlignment="Right" Margin="8" Width="32" Height="32"
+                                        Background="#80000000" CornerRadius="16" Padding="0">
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Fill="{Binding IsFavorite, Converter={StaticResource FavBrush}}"
+                                          Data="M12 21s-7-4.6-9.3-9C1.4 9.6 2.5 6.7 5.2 6c1.8-.5 3.4.3 4.3 1.6L12 11l2.5-3.4C15.4 6.3 17 5.5 18.8 6c2.7.7 3.8 3.6 2.5 6-2.3 4.4-9.3 9-9.3 9z"/>
+                                </Button>
+                                <Border VerticalAlignment="Bottom" Background="#99000000" Padding="10,8">
+                                    <Button Content="Set as Wallpaper" Command="{Binding SetWallpaperCommand}"
+                                            HorizontalAlignment="Stretch" Background="{DynamicResource AccentBrush}"
+                                            Foreground="White" CornerRadius="8" Padding="0,5" FontSize="12"
+                                            HorizontalContentAlignment="Center"/>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>
