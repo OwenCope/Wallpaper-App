@@ -19,6 +19,13 @@ public partial class ExploreViewModel : ViewModelBase
 
     public ExploreViewModel() => _ = LoadMoreCommand.ExecuteAsync(null);
 
+    /// <summary>Set the query and run a fresh search (used by Home category tiles).</summary>
+    public async Task RunQueryAsync(string query)
+    {
+        Query = query;
+        await SearchCommand.ExecuteAsync(null);
+    }
+
     [RelayCommand]
     private async Task Search()
     {

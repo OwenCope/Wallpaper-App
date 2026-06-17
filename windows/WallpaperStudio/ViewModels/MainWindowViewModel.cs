@@ -16,7 +16,15 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _selectedTab = "Home";
     [ObservableProperty] private ViewModelBase? _currentPage;
 
-    public MainWindowViewModel() => CurrentPage = _home;
+    public MainWindowViewModel()
+    {
+        CurrentPage = _home;
+        Services.AppState.Current.Navigate = (tab, query) =>
+        {
+            SelectedTab = tab;
+            if (tab == "Explore" && query is not null) _ = _explore.RunQueryAsync(query);
+        };
+    }
 
     partial void OnSelectedTabChanged(string value) => CurrentPage = value switch
     {
