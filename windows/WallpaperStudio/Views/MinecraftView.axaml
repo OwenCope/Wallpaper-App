@@ -3,10 +3,54 @@
              xmlns:vm="using:WallpaperStudio.ViewModels"
              x:Class="WallpaperStudio.Views.MinecraftView"
              x:DataType="vm:MinecraftViewModel">
-  <Border Padding="32">
-    <StackPanel Spacing="6" VerticalAlignment="Top">
-      <TextBlock Text="{Binding Title}" FontSize="26" FontWeight="SemiBold" Foreground="{DynamicResource Ink}"/>
-      <TextBlock Text="Coming next in the native rebuild." Foreground="{DynamicResource Muted}" FontSize="14"/>
-    </StackPanel>
-  </Border>
+    <Grid ColumnDefinitions="300,*">
+        <!-- Controls -->
+        <ScrollViewer Grid.Column="0">
+            <StackPanel Margin="24,28,16,24" Spacing="14">
+                <TextBlock Text="Minecraft" FontSize="26" FontWeight="SemiBold" Foreground="{DynamicResource Ink}"/>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Username" Foreground="{DynamicResource Muted}" FontSize="12"/>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBox Grid.Column="0" Text="{Binding Username}" Watermark="e.g. Notch" CornerRadius="10">
+                            <TextBox.KeyBindings>
+                                <KeyBinding Gesture="Enter" Command="{Binding RenderCommand}"/>
+                            </TextBox.KeyBindings>
+                        </TextBox>
+                        <Button Grid.Column="1" Content="Render" Command="{Binding RenderCommand}" Margin="8,0,0,0"
+                                Background="{DynamicResource AccentBrush}" Foreground="White" CornerRadius="10" Padding="12,8"/>
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Pose" Foreground="{DynamicResource Muted}" FontSize="12"/>
+                    <ComboBox ItemsSource="{Binding Poses}" SelectedIndex="{Binding PoseIndex}" HorizontalAlignment="Stretch"/>
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Framing" Foreground="{DynamicResource Muted}" FontSize="12"/>
+                    <ComboBox ItemsSource="{Binding Views}" SelectedIndex="{Binding ViewIndex}" HorizontalAlignment="Stretch"/>
+                </StackPanel>
+
+                <Button Content="Set as Wallpaper" Command="{Binding SetWallpaperCommand}" HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center" Background="{DynamicResource AccentBrush}" Foreground="White"
+                        CornerRadius="10" Padding="0,10"/>
+
+                <TextBlock Text="{Binding Status}" Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap"
+                           IsVisible="{Binding Status, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+
+                <TextBlock Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"
+                           Text="2D posed renders. The full 3D armor/trim studio is being rebuilt natively next."/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Preview -->
+        <Border Grid.Column="1" Background="#0B0B10" Margin="0">
+            <Panel>
+                <Image Source="{Binding Preview}" Stretch="Uniform" Margin="40"/>
+                <TextBlock Text="Rendering…" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center"
+                           VerticalAlignment="Center" IsVisible="{Binding Busy}"/>
+            </Panel>
+        </Border>
+    </Grid>
 </UserControl>
